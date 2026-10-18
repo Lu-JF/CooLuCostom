@@ -16,3 +16,6 @@ _tmp/
 *.tmp
 Thumbs.db
 desktop.ini
+
+# 真控制台截图：页面上有真实账号邮箱，打码前不进仓库
+/docs/panel*.png

@@ -52,7 +52,8 @@ D:\Work_AI\Git_Lu\CooLuCostom\
    ├─ VENDORS.md         # 各家供应商要什么、将来从哪儿查；Command Code 的账号与登录是怎么回事
    ├─ INSTALL.md         # 装进 Coopanion 的手把手步骤
    ├─ VERIFICATION.md    # 验证记录：跑过什么、结果是什么、什么没验证
-   └─ panel*.png         # 真控制台截图（渲染检查顺带拍的）
+   └─ panel*.png         # 真控制台截图（渲染检查顺带拍的；**不进仓库**：页面上有真实账号邮箱，
+                          #  要放仓库得先做打码版）
 ```
 
 ## 快速验证
