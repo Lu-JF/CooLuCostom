@@ -188,7 +188,7 @@ try {
   );
   check('供应商下拉有选项', data.selects >= 1, `${data.selects} 个下拉`);
 
-  // 「配置」页签：框架那张自动保存的配置页已经不声明了，这一页是我们自己画的，保存按钮得在。
+  // 「配置」页签由扩展自行声明（框架的配置页未启用），需确认保存按钮存在。
   const switched = await page.evaluate(() => {
     const tags = [...document.querySelectorAll('a, button, [role="tab"], .tab, .navitem, li')];
     const hit = tags.find((el) => (el.textContent ?? '').trim() === '配置');
@@ -213,7 +213,7 @@ try {
     check('路径项带本机选择器', (settings.text.match(/选择…/g) ?? []).length >= 3, `${(settings.text.match(/选择…/g) ?? []).length} 个选择器`);
     check('「配置」页签上不再有「即时保存」的味道', !/改完即生效/.test(settings.text), '');
   }
-  // Coopanion 自己在页面上顺手查更新（GitHub releases 限流 403、/api/framework/release 500），
+  // Coopanion 页面自身会查询更新（GitHub releases 可能限流 403、/api/framework/release 可能 500），
   // 跟这个面板无关，不算它的账。
   const ownFailed = failedUrls.filter((u) => !/api\.github\.com|api\/framework\/release/.test(u));
   check('面板相关资源没有失败', ownFailed.length === 0, ownFailed.slice(0, 2).join(' / '));

@@ -1,234 +1,193 @@
-# 笔记：接口、形状与坑
+# 接口与实现说明
 
-## Command Code 的套餐额度接口
+本文档记录扩展使用的接口、数据形状、配置语义与已知问题的处理方式。
 
-三个都是 CLI 自己用的内部接口（没有公开文档，社区项目 TokenTracker 也在用同一套），所以解析一律容错：
+## Command Code 套餐额度接口
+
+以下三个接口为 CLI 内部使用，没有公开文档，解析一律按容错处理。
 
 ```
 GET https://api.commandcode.ai/alpha/billing/credits
     → { credits: { monthlyCredits, purchasedCredits, freeCredits, creditThreshold, belowThreshold },
-        windowLimits: { limited, exceeded, fiveHour: { used, cap, exceeded, resetAt }, weekly: {...} },
+        windowLimits: { limited, exceeded, fiveHour: { used, cap, exceeded, resetAt }, weekly: { ... } },
         sandboxAccess, sandboxMinutes }
-       resetAt 是 epoch 毫秒
+      resetAt 为 epoch 毫秒
 GET https://api.commandcode.ai/alpha/billing/subscriptions
     → { success, data: { id, status, planId, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd, ... } }
-       planId 例如 individual-goat、individual-pro-v1、individual-provider
+      planId 形如 individual-goat、individual-pro-v1、individual-provider
 GET https://api.commandcode.ai/alpha/whoami
     → { success, user: { id, name, userName, email }, org }
 ```
 
-认证是 `Authorization: Bearer <apiKey>`。别的路径（`/alpha/usage`、`/provider/v1/usage`、`/api/user/self` …）
-都是 404：额度只在 billing 这两个接口里。**模型清单在 `/provider/v1/models`（带不带 Key 都通**，当前 89 个模型，
-字段 `id` / `name` / `context_length` / `supported_endpoints`）；**价目与计划可用模型没有接口**，只能抓官网计划页
-（见下面「计划页与价目页」）。
+认证方式为 `Authorization: Bearer <apiKey>`。额度相关数据仅由上述 billing 两个接口与 whoami 提供，
+其余额度类路径均返回 404。模型清单由 `/provider/v1/models` 提供，携带密钥与否均可访问，当前为 89 个模型，
+字段为 `id`、`name`、`context_length`、`supported_endpoints`。价目与计划可用模型没有对应接口，须解析
+官网页面，见下文「计划页与价目页」。
 
-实测（2026-10-13，GOAT 套餐）：`monthlyCredits 54.66`（月度额度按公开的 $70 算，已用 21.9%）、
-`fiveHour 1.10/14`（21:44 重置）、`weekly 5.78/35`（10-16 15:30 重置）、订阅周期到 10-16 15:45。
+### 月度额度的判定
 
-**月度额度的美元数不在响应里**，只有「还剩多少」。所以百分比按公开的套餐表算
-（Go 10 / GOAT 70 / Pro 80 / Max 10× 150 / Max 20× 300 / Team Pro 40，见 commandcode.ai 的
-「Usage Limits」与套餐页），认不出的套餐只报剩余、不猜百分比。表变了或者你换套餐，直接把
-`worlds.quota.monthlyAllowanceUsd` 填成数字覆盖。
+接口返回的 `credits.monthlyCredits` 表示剩余额度，响应中不含月度总额。百分比按公开的套餐额度换算，对应关系为
+Go 10、GOAT 70、Pro 80、Max 10× 150、Max 20× 300、Team Pro 40，来源为 commandcode.ai 的「Usage Limits」
+与套餐页。无法识别套餐时只报告剩余额度，不推测百分比。套餐表变动或账户更换套餐时，可将
+`worlds.quota.monthlyAllowanceUsd` 设为具体数值以覆盖默认判定。
 
 ## 密钥来源
 
-与 CLI 一致，顺序是：扩展配置 → 环境变量（`COMMAND_CODE_API_KEY`、`COMMANDCODE_API_KEY`、`COMMAND_CODE_KEY`）
-→ `~/.commandcode/auth.json` 的 `apiKey` → 指定的 `.env` 文件。Hermes 用户的 key 在
-`%LOCALAPPDATA%\hermes\.env` 里叫 `COMMANDCODE_API_KEY`，所以默认的 `envFile` 就指那儿。
+密钥的查找顺序与 CLI 一致：扩展配置中的手填密钥，其次为环境变量 `COMMAND_CODE_API_KEY`、
+`COMMANDCODE_API_KEY`、`COMMAND_CODE_KEY`，再次为 `~/.commandcode/auth.json` 的 `apiKey` 字段，
+最后为指定的 `.env` 文件。Hermes 用户的密钥位于 `%LOCALAPPDATA%\hermes\.env`，变量名为
+`COMMANDCODE_API_KEY`，因此默认的 `envFile` 指向该文件。
 
-## Hermes 的用量
+## Hermes 用量
 
-`%LOCALAPPDATA%\hermes\state.db` 的 `session_model_usage` 表，一行是
-(会话, 模型, 计费端点, 任务) 的累计：`api_call_count`、`input_tokens`、`output_tokens`、
-`cache_read_tokens`、`cache_write_tokens`、`reasoning_tokens`、`estimated_cost_usd`、`actual_cost_usd`、`first_seen`、`last_seen`。
+数据来自 `%LOCALAPPDATA%\hermes\state.db` 的 `session_model_usage` 表。该表以「会话、模型、计费端点、任务」为
+粒度累计，字段包括 `api_call_count`、`input_tokens`、`output_tokens`、`cache_read_tokens`、
+`cache_write_tokens`、`reasoning_tokens`、`estimated_cost_usd`、`actual_cost_usd`、`first_seen`、`last_seen`。
 
-- 只读打开（`node:sqlite` 的 `readOnly`）。Hermes 正在写、WAL 读不动时，把 `state.db` 与
-  `-wal`、`-shm` 复制到临时目录再读那一份。
-- `cost_*` 对 commandcode 全是 0/`unknown`：中转站不报价，所以 hermes 自己算不出花了多少钱——
-  这也正是把两边的数放在同一页看的意义。
-- 统计口径：`days` 窗口按 `last_seen` 筛，模型表按 (模型, 计费端点) 分组；`sessions` 是整库的会话数。
-- 宿主 Node 里没有 `node:sqlite` 时（很旧的 Electron），退回读 `<Hermes 数据目录>/quota-usage.json`
-  —— 形状见 `src/hermes.ts` 的 `readExport`，字段名驼峰下划线都认。
+- 数据库以只读方式打开。若 Hermes 正在写入且 WAL 无法读取，则先将 `state.db` 与其 `-wal`、`-shm` 文件复制到
+  临时目录，再读取副本。
+- `cost_*` 字段对 commandcode 全部为 0 或 `unknown`，因为中转站不返回单价，Hermes 无法计算费用。这也是将
+  供应商额度与本机用量放在同一页对照的原因。
+- 统计口径：`days` 窗口按 `last_seen` 筛选，模型表按「模型、计费端点」分组，`sessions` 为整库会话数。
+- 宿主 Node 不含 `node:sqlite` 时，回退读取 `<Hermes 数据目录>/quota-usage.json`，形状见 `src/hermes.ts` 的
+  `readExport`，字段名的驼峰与下划线写法均可识别。
 
-## 多账号与密钥落点
+## 账号与密钥存储
 
-账号表在 **`<ctx.dataDir>/quota/accounts.json`**（`ctx.dataDir` 是桌宠的数据目录，dev 实例里就是
-`build\data\home\companion\data`），记名字、供应商、来源、变量名、密钥尾四位、邮箱、套餐、最近检查/失败。
-两种来源（`origin`）：
+账号表位于 `<ctx.dataDir>/quota/accounts.json`，记录名称、供应商、来源、变量名、密钥尾四位、邮箱、套餐、
+最近检查时间与失败原因。`ctx.dataDir` 为桌宠实例的数据目录，源码实例中即 `build\data\home\companion\data`。
+账号按 `origin` 分为两类。
 
-- **`native`：桌宠里配的模型端点**（推荐，也就是使用者说的「原生接入」）。布局实测：
+- **native**：桌宠中配置的模型端点，即原生接入方式。端点凭证的布局为：
 
   ```
-  <home>/providers/<端点名>/config.json   { kind, baseUrl, secret: "<.env 里的变量名>", spec, … }
+  <home>/providers/<端点名>/config.json   { kind, baseUrl, secret: "<.env 中的变量名>", spec, ... }
   <home>/providers/<端点名>/.env          <变量名>=<密钥>
   ```
 
-  `src/native.ts` 只看 `baseUrl` 指向 `commandcode.ai` 的那些端点；每轮取数前重新扫一遍
-  （桌宠里换端点/换 Key，这里立刻跟上），把端点 upsert 成账号：id 由端点名定死（`nativeAccountId`），
-  有就更新、没有就加，第一条被发现的端点自动成为当前账号。密钥**每轮从端点 `.env` 现读**，
-  不复制到别处。登录邮箱与套餐用同一把密钥问 `/alpha/whoami` 与 `/alpha/billing/subscriptions` 回填，
-  回填后账号名就跟着邮箱走（界面上看到的是「哪个号」而不是「哪个端点」）。
-  「桌宠在用」的标记来自 `<botDir>/config.json` 的 `activeProvider`。
-- **`manual`：面板里手动加的**（给不在桌宠端点里的号）。密钥经 `ctx.storeSecret` 写进
-  **部署 `.env`**（变量名如 `QUOTA_COMMANDCODE_1`），表里只有变量名与尾四位。只有这种账号能在面板里删。
+  `src/native.ts` 仅识别 baseUrl 指向 `commandcode.ai` 的端点。每轮取数前重新扫描端点目录，使桌宠中更换端点
+  或密钥后能立即生效。端点被登记为账号，id 由端点名固定生成，已存在则更新，不存在则新增，首个被发现的端点
+  自动成为当前账号。密钥每轮从端点 `.env` 现读，不复制到其他位置。登录邮箱与套餐通过同一把密钥查询
+  `whoami` 与 `billing/subscriptions` 回填，回填后账号名称即显示邮箱。桌宠是否正在使用该端点由
+  `<botDir>/config.json` 的 `activeProvider` 判定。
 
-取数用的 Key 顺序：**当前账号（native 读端点 `.env` / manual 读部署 `.env`）→ 配置里手填的 Key →
-环境变量 → 登录文件 → 指定的 `.env`**。切账号会重置提醒游标（`firedByAccount` 按账号 id 分组）。
-账号只服务这一页的额度/价目，Coo 用哪个端点说话由「模型供应商」页决定。
+- **manual**：在面板中手动添加的账号，用于不在桌宠端点中的凭证。密钥经 `ctx.storeSecret` 写入部署目录的
+  `.env`，变量名形如 `QUOTA_COMMANDCODE_1`，账号表仅保存变量名与尾四位。只有此类账号可在面板中删除。
 
-**Command Code 没有「账号密码」接口**：官方 CLI 的登录是浏览器 OAuth（临时本地回调 + `~/.commandcode/auth.json`），
-所以「在面板里输账号密码」做不到；面板显示的邮箱是拿端点那把 Key 调 `whoami` 问出来的，不是读 cookie。
-详见 `docs/VENDORS.md`。
+取数所用密钥的优先级为：当前账号的密钥，其次为配置中手填的密钥，再次为环境变量、登录文件、指定的 `.env`。
+切换账号会重置提醒游标，游标按账号 id 分组。账号仅服务于本页的额度与价目取数；桌宠对话所使用的端点由
+「模型供应商」页决定。
 
-## 面板上的按钮与「保存」（两条踩过的坑）
+Command Code 不提供账号密码登录接口。官方 CLI 的登录采用浏览器 OAuth，因此无法在面板中通过账号密码切换账号。
+面板显示的邮箱由端点密钥调用 `whoami` 获得，并非读取浏览器 cookie。详见 `docs/VENDORS.md`。
 
-- **按钮为什么看着像纯文字**：控制台的**页面作用域**把 `.btn` 重定义成
-  `background: transparent; border: 1px solid transparent`（原文在 `src/web/public/styles.css`
-  的页面级 `.btn` 块，第 ~1460 行），只有 hover 才变色；`.btn.sm` 又小，在表格里就跟文字一样。
-  扩展这边的修法是**在 `.quota-shell` 里把按钮的样子给回来**（浅填充 + 可见描边 + 一点阴影 + 按下位移），
-  颜色全用 `color-mix` 从主题变量混出来，浅色/深色主题都不跑偏。不动框架样式，升级也不受影响。
-- **框架「配置」页没有保存按钮，它是 400ms 防抖即时保存**：`src/web/client/features/config/view.ts`
-  里写着 `const SAVE_DEBOUNCE_MS = 400`，连续输入去抖后直接 POST `/api/config`；框架只提供 `x-hot`
-  （改完是否需重启），**没有「先编辑、后提交」这种模式**。也就是说「提醒阈值」这种数字敲到一半就会被存下来
-  （想写 `80`，敲到 `8` 就已经存进去了）。
-  **解法：不把配置段声明给框架**（`console().config` 不填），改成**自己再声明一个面板**——
-  框架里「一个面板 = 一个页签」，所以第二个面板 `{ id: 'settings', title: '配置' }` 就是我们要的那一页。
-  面板里画分组表单（提醒 / 连接 / 路径），底部一个**保存**按钮 → `invoke('saveSettings')` →
-  World 端逐字段校验夹紧后 `ctx.persist(patch)` **一次写回**；路径类字段用 `ctx.pickPath()` 配「选择…」。
-  密钥框留空表示「不动它」，免得每次保存都把已有密钥抹掉。
-  实测：manifest 里 `panels=quota,settings`、`configGroups=0`；保存后 `config.json` 的 `worlds.quota` 同步落盘。
-  （附带发现：`POST /api/config` 其实**接受未声明的键**，只是页面不渲染它们——所以别指望「不声明」能挡住写入。）
+## 取数策略
 
-## 取数策略（不做自动轮询）
+- 进入页面时先由 `state` 渲染已有读数，再执行一次 `refresh` 取网络数据；其后不再自动取数，如需更新则使用各
+  卡片的按钮，包括额度「刷新」、模型「刷新」与价目「抓取」。
+- `state` 仅返回内存中的读数，例外情形是 Hermes 统计范围变化时重新读取本机数据库。
+- World 的后台轮询（`worlds.quota.pollMinutes`，默认 10 分钟）只服务于阈值提醒。设为 0 时，取数仅发生在面板
+  操作或工具调用时。
 
-- 面板**进入这一页**：先 `state` 把手上那份画出来（不拉网络，实测 0.02s），再 `refresh` 拉一次（约 2.3s），
-  之后**不再自动取数**；要新的就读各卡上的按钮（额度「刷新」、模型「刷新」、价目「抓取」）。
-- `state` 只回内存里那份；唯一例外是 Hermes 的统计范围变了就地重读本机 sqlite（本地、便宜）。
-- World 自己的后台轮询（`worlds.quota.pollMinutes`，默认 10 分钟）只为**越过阈值的提醒**服务；
-  设 0 就完全只在面板/工具调用时取数。
+## 计划页与价目页
 
-## 计划页与价目页（爬取）
+计划可用模型、单价与计划额度在官网页面提供，无对应接口，因此采用页面解析，实现见 `src/pricing.ts`。
 
-用户要的「计划可用模型 + 单价 + 计划额度」官网上有，接口里没有，所以抓网页（`src/pricing.ts`）：
-
-- 计划页 `https://commandcode.ai/docs/plans/<go|goat|pro|max|ultra|provider|teams-pro>` 是 SSR 的真
-  `<table>`，三张表按模型名对齐：① `Model | Context | Intelligence | Input | Output | Cache read | Cache write | Caps`
-  ② `Model | Requests / 5 hours | Requests / week | Requests / month` ③ `Model | … | Monthly credits`。
-  实测 GOAT 页 65 行，含每个模型的请求额度与月度 $ 额度。
-- 全局价目页 `https://commandcode.ai/docs/resources/pricing-limits` 把 93 个模型塞在 Next.js 的 RSC
-  JSON（`self.__next_f.push([1,"…"])` 拼起来后的 `"rows":[…]`）里，渲染出来的是 CSS grid 不是 `<table>`，
-  所以先读 JSON、读不到再退回表格。
-- 解析全容错：金额 `$0.10` → 0.1，`Free` → 0 + `free: true`，`—` → null，`+1` 之类脚注收进 `caps`；
-  认不出来只是少一段数据，写进 `notes` 不抛错。
-- 抓回来缓存到 **`<ctx.dataDir>/quota/plan-<slug>.json`**，默认 12 小时；抓不到就吃缓存（过期的也吃），
-  带 `reason` 说明；面板的「抓取」按钮传 `maxAgeMs: 0` 强制重抓。
-- planId → slug 的映射在 `planSlugFor`（`individual-goat` → `goat`；认不出就退回全局价目页）。
-  换账号/换套餐（planId 变了）会自动重抓。
+- 计划页 `https://commandcode.ai/docs/plans/<go|goat|pro|max|ultra|provider|teams-pro>` 为服务端渲染，包含
+  三张以模型名对齐的表格：模型与上下文及单价；按模型的请求额度；按模型的月度额度。
+- 全局价目页 `https://commandcode.ai/docs/resources/pricing-limits` 的模型数据位于 Next.js 的 RSC JSON 中，
+  渲染结果为 CSS grid 而非 `<table>`，因此优先解析该 JSON，失败时回退解析表格。
+- 解析过程全程容错：`$0.10` 解析为 0.1，`Free` 解析为 0 并置 `free` 标记，`—` 解析为 null，脚注内容归入
+  `caps`。无法识别的内容只会使对应字段缺失，并记录到 `notes`，不抛出异常。
+- 解析结果缓存于 `<ctx.dataDir>/quota/plan-<slug>.json`，默认有效期 12 小时。请求失败时使用缓存，包括已过期
+  的缓存，并附带 `reason` 说明。面板的「抓取」按钮传入 `maxAgeMs: 0` 以强制重新获取。
+- planId 到 slug 的映射由 `planSlugFor` 提供，无法识别时回退至全局价目页。账号或套餐变更导致 planId 变化时，
+  自动重新获取。
 
 ## 供应商接缝
 
-`src/sources.ts` 里一张登记表：`commandcode` 有实现（`fetchQuota` / `fetchModels` / `planPageUrl`），
-其余 8 家只有 `implemented: false` 与两句说明（`needs` 要什么、`plan` 将来从哪儿查：OpenAI 走
-`/v1/organization/costs`（要 Admin Key）、Anthropic 走 `/v1/organizations/cost_report`、DeepSeek 走
-`/user/balance`、OpenRouter 走 `/api/v1/credits` 与自带价格的 `/api/v1/models`、Kimi 走
-`/v1/users/me/balance`、智谱与百炼没有公开余额接口、自定义中转看情况）。这些接口是**候选、待核实**，
-写在那儿是为了让接新家时知道从哪起手——面板切过去只会显示「未实现」与这段说明，不发任何请求。
-「当前供应商」存在配置 `worlds.quota.source`（x-hot），面板的下拉直接写它。
+`src/sources.ts` 中包含一张供应商登记表。commandcode 已实现 `fetchQuota`、`fetchModels` 与 `planPageUrl`；
+其余 8 家仅有 `implemented: false` 与说明字段，分别记录所需凭证与取数位置，均为候选待核实项。切换到未实现的
+供应商时不发起任何请求，读数栏显示「未实现」。当前供应商保存在 `worlds.quota.source`，面板下拉框直接写入该
+配置项。
 
-## 坑
+## 面板实现要点
 
-1. **vite / vitest 解析不了 `node:sqlite`**：静态 `import` 或动态 import 都会被它当成一个叫 `sqlite` 的包。
-   用 `createRequire(import.meta.url)('node:sqlite')` 绕开，这也是 `src/hermes.ts` 现在的写法。
-2. **面板 bundle 只能 `import type` 框架**：任何运行时 import 都会让 esbuild 报
-   "Could not resolve cortico/…"。所以共享的类型放在 `src/view-types.ts`，那里不 import 任何带 node 依赖的模块，
-   浏览器侧 tsconfig 也编得了它。
-3. **浏览器侧 tsconfig 要开 node 类型**：面板 import 的类型链（如 `cortico/core/language.ts`）会牵进带
-   `node:built-in` 的框架源码，Coopanion 自己的 web tsconfig 也是这么写的（注释里就说了这一点）。
-4. **普通模式看不到这页**：Coopanion 的普通模式左栏只列桌宠四页 + 系统提示词 + 用量与成本 + 对话，
-   扩展页只在高级模式里出现。所以提醒走气泡，页面走高级模式。
-5. **提醒去重靠游标**：`窗口:重置时刻:档位`。窗口重置后 `resetAt` 变了，同一档才会再报一次；
-   服务器不给 `resetAt` 时退化成订阅周期做锚点，避免每轮都报。
-6. **Cortico 与自己那份 `cortico` 包**：开发期 `cortico/*` 由 npm 上的 `cortico` 包解析（当前 0.1.13），
-   装进宿主后由框架的模块钩子解析到它自己运行的那份源码。两边的 `WorldDefinition` 形状一致（world api 5）。
-7. **sparse-checkout 会静默毁掉形象包**：只检出部分目录时，`packages/cortico-world-desktop-pet/web/whale/`
-   不在工作树里，切到 whale 会「没能显示出来」并回退 Coo，而且**回退会写回配置**（`skin.figure` 变成 coo）。
-   要动这个仓库就用完整检出（`git sparse-checkout disable`）。
-8. **pnpm 在搬动过的目录上要一次重建**：非交互环境跑 `pnpm run dev` 会先自检依赖，发现 node_modules 与
-   项目位置/状态对不上就想重建，TTY 缺失时报 `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`；给 `CI=true`
-   跑一次 `pnpm install` 即可。另外 **`electron` 的 postinstall 常被跳过**，二进制要手动补：
-   `cd node_modules/electron && ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node install.js`。
-   国内网络下 registry 也换 npmmirror，否则 110 MB 的 Electron 包基本下不下来。
-9. **真宿主的面板原语与替身有差异**：`ctx.ui.sheet()` 画出来的是 `div.sheet.tabbed > h3 + .sheetbody`，
-   不是 `section.sheet`；DOM 断言按真结构写。
-10. **路由里的页 id 是编码过的**：导航 href 形如 `#/provider/world%3Aquota`（`buildHash` 对每段
-    `encodeURIComponent`）。另外 Coopanion **普通模式**会把非桌宠页重定向回「开始」，要看这一页得先切
-    **高级模式**（`localStorage['companion.mode']='advanced'`）。
-11. **`node:sqlite` 在 vitest 里**：静态 import 与动态 import 都会被 vite 当成一个叫 `sqlite` 的包，
-    用 `createRequire(import.meta.url)('node:sqlite')`。
-12. **改完面板代码却看到老页面 = HTTP 缓存假象，且「重启」不一定救得了**：面板产物的响应头是
-    `Cache-Control: public, max-age=31536000, immutable`，而 URL 只带包版本（`…/0.1.0/console.js`）。
-    开发期版本号不变 → 之前抓过旧产物的客户端（控制台窗口、渲染检查用的 Electron）在整个有效期内
-    **不再回源**，于是「我这边是新页面、使用者那边还是 3 张卡」。
-    **可靠修法：升 `package.json` 里的 version**（URL 随之改变，缓存必然失效），再重启应用/进程；
-    使用者那边只需重新打开那一页（已加载在内存里的旧 JS 不会自己换）。
-    渲染检查为了可重复，另给每次运行独立的 `app.setPath('userData', …)` 并加 `disable-http-cache`。
-13. **长面板整页截图会挂**：内容比视口高、卡片头是 sticky 时，`page.screenshot({fullPage:true})` 会
-    卡在「waiting for fonts」直到超时。改成**把视口开高**（1400×2600）拍视口截图，并让截图失败不影响
-    整体判定。
-14. **World 的目录与秘密存储**：`ctx.dataDir` 是**桌宠实例的数据目录**（dev 里
-    `build\data\home\companion\data`），不是 `build\data`；`ctx.storeSecret(name, value)` 写的是
-    `<botDir>/.env`（`build\data\home\companion\.env`）并同步 `process.env`，而 `ctx.secret(name)` 读的是
-    「进程环境优先，其次那份 `.env`」。写缓存文件前要自己 `mkdirSync(recursive)`，框架不管这个。
-15. **面板的 `invoke` 方法要跟 World 的 switch 对齐**：面板调的每一个方法名（`state`/`refresh`/
-    `addAccount`/`activateAccount`/`removeAccount`/`models`/`pricing`）都要在 `world.ts` 的 `invoke` 里
-    有分支，否则是 500；jsdom 替身测不到这条，真控制台才露出来。渲染检查里的「添加账号」按钮能做真
-    检查，别只断言文案。
+### 按钮样式
 
-## 官方安装版与 v0.2.x 的路由变化（2026-10-18）
+控制台的页面级样式将 `.btn` 重定义为透明背景与透明边框，仅在悬停时改变颜色；`.btn.sm` 尺寸较小，在表格中与
+普通文本难以区分。扩展在 `.quota-shell` 作用域内重新定义按钮外观，包含浅色填充、可见描边、阴影与按下位移，
+颜色由 `color-mix` 从主题变量调和，兼容浅色与深色主题。该做法不修改框架样式，不受框架升级影响。
 
-本机把桌宠从「源码 dev 实例」切成**官方安装版 v0.2.4**（`D:\Sorftware\Coopanion`）。搬过去的过程里值得记下来的：
+### 「配置」页签与保存语义
 
-- **数据目录**：Windows 安装版的数据在**程序旁边** `<安装目录>\data`。选择顺序是
-  `CORTICO_COMPANION_DATA` 环境变量 → 程序旁边的 `data\` → `%LOCALAPPDATA%\Coopanion\data-location.json`
-  里记的那份（`app/data-dir.cjs` 的 `locateData`）。规则里「程序旁边的 `data\` 最优先」，所以
-  **先把旧实例的 `data\home` 与 `data\extensions` 拷进 `<安装目录>\data` 再首次启动**，桌宠第一次睁眼就是原来的样子
-  （配置、记忆、角色、原生端点凭证全在）。安装器不碰 `data\`（`installer/nsis.nsh` 的 `customRemoveFiles`
-  只删 Electron 自己的文件；卸载也保留 `data\`）。
-- **扩展怎么进官方版**：`extensions\package.json` 的 `dependencies` + `extensions\node_modules\<包名>`，
-  两处齐了框架才认（`cortico` 的 `src/extensions.ts` 里 `readInstalled` 只读 dependencies 的键，再按包名去
-  `node_modules` 找）。dev 实例里用的是 `link:` 软链；官方版里改成**真拷贝**——仓库可以搬/删，
-  链接一旦指错桌宠下次就没有这一页。拷贝交给 `scripts/sync-extension-to-app.mjs`。
-- **路由变了（v0.2.x）**：控制台清单 `/api/console/manifest` → **`/api/webui/manifest`**；面板方法
-  `/api/console/providers/<页>/panels/<面板>/<方法>` → **`/api/webui/providers/…`**（且只认 `POST`，
-  `GET` 回 405）；设置窗口的页面从 `/` 挪到 **`/coopanion/<hash>`**；`/api/figures` 这类旧路由在新版 404。
-  于是 `scripts/verify-instance.mjs` 改成两条路由都试（先 webui，404 再退老路），
-  `extension/scripts/check-panel-render.mjs` 改成**按侧栏文案点「用量额度」**进入（老版本退回带 hash 直进），
-  面板产物地址也从 manifest 里读，不再写死版本号。
-- **旧契约仍能用**：`cortico.api: 5` 的扩展在 v0.2.4 上照常加载（v0.2.0 发布说明：按旧接口写的扩展照常加载，
-  Cortico 下一个大版本起不再加载）。实测这一页、两个灯、五个徽章、两个页签、`state` 数据面全部正常。
-- **含中文的 .ps1 必须带 UTF-8 BOM**：PowerShell 5.1 默认按 ANSI 读脚本，无 BOM 的中文会让它在字符串处报
-  `TerminatorExpectedAtEndOfString`。`scripts/create-shortcut-to-app.ps1` 就是这么修好的。
-- **改名整个仓库目录的坑**：`mv` 会 `Device or resource busy`——占着它的是我自己那个终端会话的**残留 bash**
-  （cwd 还在里面），PowerShell 的 `Move-Item` 同样失败。可行的办法是**分片搬**：先建新目录，再逐个 `mv`
-  子项（`.git`、`docs`、`extension`、`scripts`、`upstream`…）——子项在父目录里改名不受句柄影响。
-  搬完老目录只剩空壳，等那些 bash 退出后 `rmdir` 即可。
-- **改名后 dev 实例的软链会全断**：pnpm 在 `node_modules` 里放的是**绝对路径**的软链，仓库一改名，
-  `node_modules\electron`、`node_modules\cortico-world-desktop-pet` 之类全成断链（清单里还在，访问就报不存在）。
-  真身在 `node_modules\.pnpm\<包>@<版本>\node_modules\<包>`。修法是重跑一次 `CI=true pnpm install`；
-  `extension/scripts/check-panel-render.mjs` 现在会自己翻 `.pnpm` 找 electron，所以改名后仍能跑渲染检查。
+框架的配置页采用 400 毫秒防抖即时保存，输入过程中即会写入配置，没有「先编辑、后提交」模式。为避免数值输入到
+一半被存入，扩展不将配置段声明给框架，而是自行声明第二个面板作为「配置」页：框架中每个面板对应一个页签，因此
+第二个面板即为所需页面。该页以分组表单呈现提醒、连接与路径三类字段，底部设有「保存」按钮，点击后调用
+`invoke('saveSettings')`，由 World 端逐字段校验并夹紧取值范围，再通过 `ctx.persist` 一次性写回。路径类字段
+使用 `ctx.pickPath` 提供本机选择器。密钥输入框留空表示保持原有密钥，避免保存时清空已存内容。
 
-## 上传 Git 前的隐私打码（2026-10-18）
+框架的 `POST /api/config` 实际接受未声明的配置键，只是不对其进行渲染，因此不声明并不阻止写入。
 
-仓库要推到 GitHub（私有），上传前把能让代码指回本人的东西都换掉了。规则如下，以后新增文档/测试夹具照着来：
+## 已知问题与处理
 
-- **邮箱**：文档与测试夹具里出现的真实账号邮箱、校邮箱，一律写成 `test@gmail.com`（夹具里要区分两个账号时用
-  `test@gmail.com` 与 `other@example.com`）。
-- **本机用户名**：路径写成 `C:\Users\user\AppData\Local\hermes\…`（别再写真名缩写那个目录名）。
-- **真截图不进仓库**：`docs/panel*.png` 是渲染检查顺带拍的真控制台，页面上有真实账号邮箱与密钥尾号，图里没法
-  文本替换，所以进 `.gitignore`（本地留着）。要放仓库得先做打码版。
-- **提交作者保留本人身份**——按使用者的要求，作者栏不打码（作者邮箱是账号级信息，写在提交元数据里，
-  不在文件内容里）；想让 GitHub 把提交归到账号上，那个邮箱得在 GitHub 里验证过。
-- 打码是**连历史一起洗**的：`git filter-branch --tree-filter` 逐个提交洗内容（脚本在临时检出里跑，
-  磁盘上的工作区与忽略目录不受影响），然后删掉 `refs/original` 让旧提交不可达。洗之前把 `.git` 复制到
-  `D:\Work_AI\Git_Lu\_backup-git-<时间戳>` 作退路（名字记在 `_last-backup.txt`）。
-  注意：内容洗掉后**提交哈希会变**，文档里引用旧哈希的地方要一起改。
+1. **vitest 无法解析 `node:sqlite`**。静态导入与动态导入均会被解析为名为 `sqlite` 的第三方包。解决方式为使用
+   `createRequire(import.meta.url)('node:sqlite')`，`src/hermes.ts` 采用该写法。
+2. **面板产物只能以 `import type` 引用框架**。任何运行时导入都会导致 esbuild 报模块无法解析。因此共享类型
+   集中定义在 `src/view-types.ts`，该文件不引用任何带 Node 依赖的模块，浏览器侧 tsconfig 也能编译。
+3. **浏览器侧 tsconfig 需启用 node 类型**。面板所引用的类型链会涉及带 `node:` 内置模块的框架源码，
+   Coopanion 自身的 web tsconfig 亦采用相同设置。
+4. **普通模式不显示该页面**。Coopanion 普通模式的左栏不包含扩展贡献的页面，扩展页仅在高级模式下出现。因此
+   提醒功能通过气泡呈现，页面访问需切换至高级模式。
+5. **提醒去重依赖游标**。游标形式为「窗口、重置时刻、档位」。窗口重置后 `resetAt` 变化，同一档位才会再次提醒；
+   服务端未提供 `resetAt` 时，退化为以订阅周期为锚点，避免每轮重复提醒。
+6. **契约包的双重解析**。开发期 `cortico/*` 由 npm 上的 `cortico` 包解析；装入宿主后由框架的模块钩子解析到其
+   自身运行的源码。两处的 `WorldDefinition` 形状一致，契约号均为 5。
+7. **sparse-checkout 会导致角色资源缺失**。仅检出部分目录时，角色资源目录不在工作树中，切换至该角色会失败并
+   回退为默认角色，且回退结果会写入配置。操作该仓库时应使用完整检出。
+8. **依赖需要重建的情形**。非交互环境下启动源码实例时会校验依赖状态，不匹配时尝试重建，缺少 TTY 会报错，
+   设置 `CI=true` 后执行一次 `pnpm install` 即可。`electron` 的 postinstall 常被跳过，需手动执行
+   `node_modules/electron` 目录下的 `install.js`。网络受限时同时配置 registry 与 Electron 镜像。
+9. **真实宿主与测试替身的 DOM 差异**。`ctx.ui.sheet()` 生成的结构为 `div.sheet.tabbed > h3 + .sheetbody`，
+   而非 `section.sheet`，DOM 断言须按真实结构编写。
+10. **路由中的页面 id 经过编码**。导航地址形如 `#/provider/world%3Aquota`。此外普通模式会将非桌宠页面重定向，
+    访问该页面需先切换至高级模式，即设置 `localStorage['companion.mode']` 为 `advanced`。
+11. **面板产物存在 HTTP 缓存**。产物响应头为 `Cache-Control: public, max-age=31536000, immutable`，URL 中仅
+    包含包版本号。版本号不变时，此前获取过旧产物的客户端在有效期内不会重新请求，于是出现代码已更新而页面仍为
+    旧版的现象。可靠的处理方式是提升 `package.json` 的版本号使 URL 变化，再重启应用；使用方重新打开页面即可。
+    渲染检查脚本为每次运行指定独立的 `userData` 目录并禁用 HTTP 缓存。
+12. **长页面整页截图会超时**。内容高度超过视口且卡片头为固定定位时，整页截图会在等待字体阶段超时。改为提高视口
+    高度后截取视口，并允许截图失败不影响整体判定。
+13. **World 的目录与秘密存储**。`ctx.dataDir` 为桌宠实例的数据目录，不是应用数据根目录；`ctx.storeSecret` 的
+    实现为写入 `<botDir>/.env` 并同步进程环境，`ctx.secret` 读取时以进程环境优先，其次为该 `.env` 文件。写入
+    缓存文件前需自行创建目录。
+14. **面板调用的方法须与 World 的分支一致**。面板调用的每个方法名均须在 `world.ts` 的 `invoke` 中有对应分支，
+    否则返回 500。该问题在 jsdom 替身中不会暴露，仅在实际控制台中出现，因此渲染检查应对可交互元素执行真实点击，
+    而不只断言文案。
+
+## 与官方安装版的兼容性
+
+Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定顺序为环境变量 `CORTICO_COMPANION_DATA`、程序旁的
+`data\`、`%LOCALAPPDATA%\Coopanion\data-location.json` 中记录的位置，实现见 `app/data-dir.cjs` 的 `locateData`。
+由于程序旁的 `data\` 优先级最高，迁移时将原实例的 `data\home` 与 `data\extensions` 复制进 `<安装目录>\data`
+后再首次启动，即可继承配置、记忆、角色与端点凭证。安装器不修改 `data\`，卸载时亦保留。
+
+扩展在安装版中的识别条件为：`extensions\package.json` 的 `dependencies` 中包含包名，且包位于
+`extensions\node_modules\<包名>`，两处需同时满足。源码实例使用 `link:` 软链，安装版使用实体副本，避免仓库移动
+或删除后链接失效。复制工作由 `scripts/sync-extension-to-app.mjs` 完成。
+
+上游 v0.2.x 调整了控制台路由：清单由 `/api/console/manifest` 改为 `/api/webui/manifest`，面板方法由
+`/api/console/providers/<页>/panels/<面板>/<方法>` 改为 `/api/webui/providers/...` 且仅接受 POST 请求，设置页
+路径调整为 `/coopanion/<hash>`。契约号为 5 的扩展仍可正常加载，官方发布说明指出按旧接口编写的扩展可继续使用，
+至下一个大版本为止。自检脚本兼容新旧两套路由。
+
+其他注意事项：包含中文字符的 PowerShell 脚本须保存为带 BOM 的 UTF-8，否则 PowerShell 5.1 会按 ANSI 解析并在
+字符串处报语法错误。仓库目录改名后，pnpm 在 `node_modules` 中创建的绝对路径软链会全部失效，实际文件位于
+`.pnpm` 目录下，重新执行一次 `pnpm install` 可修复。
+
+## 隐私约定
+
+仓库内的文档与测试夹具统一使用 `test@gmail.com` 与 `C:\Users\user\...` 作为占位值，不包含真实账号邮箱与本机
+用户名。`docs/panel*.png` 为真实控制台截图，包含账号邮箱与密钥尾号，因此未纳入仓库。提交作者信息保留本人身份，
+不参与打码。历史内容的清理使用 `git filter-branch --tree-filter` 逐个提交处理，处理前需备份 `.git`。内容变更
+会导致提交哈希变化，文档中引用旧哈希的位置须同步更新。
