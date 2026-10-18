@@ -279,7 +279,7 @@ verify-instance → 12 项全过（含「两个页签声明在」「配置不再
               「配置」页签 1 个保存按钮 + 3 个路径选择器、面板产物请求 200
 同步脚本    → node scripts/sync-extension-to-app.mjs → 重新构建并拷进官方版 ✓（dist/console.js 29.8 KB）
 快捷方式    → 桌面「桌宠 Coo.lnk」→ D:\Sorftware\Coopanion\Coopanion.exe ✓（安装器自带的 Coopanion.lnk 同指）
-改名        → D:\Work_AI\Coopanion-Usage → D:\Work_AI\Git_Lu\CooLuCostom（分片搬；首提交 b836e7f 完好）；
+改名        → D:\Work_AI\Coopanion-Usage → D:\Work_AI\Git_Lu\CooLuCostom（分片搬；首提交 82f60d0 完好）；
               仓内 8 处写死路径已改；dev 实例里的扩展链接已重指新路径 ✓
 ```
 

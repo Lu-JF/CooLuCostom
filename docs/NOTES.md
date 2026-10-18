@@ -216,3 +216,19 @@ GET https://api.commandcode.ai/alpha/whoami
   `node_modules\electron`、`node_modules\cortico-world-desktop-pet` 之类全成断链（清单里还在，访问就报不存在）。
   真身在 `node_modules\.pnpm\<包>@<版本>\node_modules\<包>`。修法是重跑一次 `CI=true pnpm install`；
   `extension/scripts/check-panel-render.mjs` 现在会自己翻 `.pnpm` 找 electron，所以改名后仍能跑渲染检查。
+
+## 上传 Git 前的隐私打码（2026-10-18）
+
+仓库要推到 GitHub（私有），上传前把能让代码指回本人的东西都换掉了。规则如下，以后新增文档/测试夹具照着来：
+
+- **邮箱**：文档与测试夹具里出现的真实账号邮箱、校邮箱，一律写成 `test@gmail.com`（夹具里要区分两个账号时用
+  `test@gmail.com` 与 `other@example.com`）。
+- **本机用户名**：路径写成 `C:\Users\user\AppData\Local\hermes\…`（别再写真名缩写那个目录名）。
+- **真截图不进仓库**：`docs/panel*.png` 是渲染检查顺带拍的真控制台，页面上有真实账号邮箱与密钥尾号，图里没法
+  文本替换，所以进 `.gitignore`（本地留着）。要放仓库得先做打码版。
+- **提交作者保留本人身份**——按使用者的要求，作者栏不打码（作者邮箱是账号级信息，写在提交元数据里，
+  不在文件内容里）；想让 GitHub 把提交归到账号上，那个邮箱得在 GitHub 里验证过。
+- 打码是**连历史一起洗**的：`git filter-branch --tree-filter` 逐个提交洗内容（脚本在临时检出里跑，
+  磁盘上的工作区与忽略目录不受影响），然后删掉 `refs/original` 让旧提交不可达。洗之前把 `.git` 复制到
+  `D:\Work_AI\Git_Lu\_backup-git-<时间戳>` 作退路（名字记在 `_last-backup.txt`）。
+  注意：内容洗掉后**提交哈希会变**，文档里引用旧哈希的地方要一起改。
