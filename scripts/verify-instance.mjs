@@ -57,12 +57,18 @@ check(
   installed ? `${installed.name}@${installed.version} loaded=${installed.loaded}` : '列表里没有它',
 );
 
-const manifest = await get('/api/console/manifest');
+// v0.2.0 起框架把控制台清单从 /api/console/manifest 挪到 /api/webui/manifest，面板方法也从
+// /api/console/providers/… 挪到 /api/webui/providers/…。两条都试，好让这份自检在老实例和新安装版上都能跑。
+const webui = await get('/api/webui/manifest');
+const manifest = webui.status === 200 ? webui : await get('/api/console/manifest');
+const panelBase = webui.status === 200 ? '/api/webui/providers' : '/api/console/providers';
 const page = (manifest.json?.providers ?? []).find((p) => p.id === 'world:quota');
 check(
   '控制台页 world:quota 在 manifest 里',
   Boolean(page),
-  page ? `${page.label} panels=${(page.panels ?? []).map((p) => p.id).join(',')} config=${(page.configGroups ?? []).join(',')}` : 'manifest 里没有',
+  page
+    ? `${manifest.status} ${webui.status === 200 ? '/api/webui/manifest' : '/api/console/manifest'} · ${page.label} panels=${(page.panels ?? []).map((p) => p.id).join(',')}`
+    : 'manifest 里没有',
 );
 
 if (page?.client?.js) {
@@ -88,7 +94,7 @@ check(
   world ? `status=${world.status} tools=${(world.tools ?? []).join(',')} lamps=${(world.lamps ?? []).length}` : '没有 quota',
 );
 
-const panel = await post('/api/console/providers/world%3Aquota/panels/quota/state', { args: [{ days: 7 }] });
+const panel = await post(`${panelBase}/world%3Aquota/panels/quota/state`, { args: [{ days: 7 }] });
 const view = panel.json;
 check('面板数据面 state', panel.status === 200 && Boolean(view?.quota), `HTTP ${panel.status}`);
 if (view?.quota) {
@@ -119,7 +125,7 @@ if (withAlerts && view?.quota?.ok) {
   const before = view.config?.alertPercent ?? 80;
   const startedAt = Date.now() - 5_000;
   await post('/api/config', { group: 'world:quota', values: { 'worlds.quota.alertPercent': 1 } });
-  await post('/api/console/providers/world%3Aquota/panels/quota/refresh', { args: [{ days: 7 }] });
+  await post(`${panelBase}/world%3Aquota/panels/quota/refresh`, { args: [{ days: 7 }] });
   // 事件落库与 HTTP 返回之间有几拍：等一会儿再读，别把刚发的当没发。
   let fired = [];
   for (let i = 0; i < 8 && fired.length === 0; i += 1) {

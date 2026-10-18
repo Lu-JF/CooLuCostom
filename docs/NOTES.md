@@ -183,3 +183,36 @@ GET https://api.commandcode.ai/alpha/whoami
     `addAccount`/`activateAccount`/`removeAccount`/`models`/`pricing`）都要在 `world.ts` 的 `invoke` 里
     有分支，否则是 500；jsdom 替身测不到这条，真控制台才露出来。渲染检查里的「添加账号」按钮能做真
     检查，别只断言文案。
+
+## 官方安装版与 v0.2.x 的路由变化（2026-10-18）
+
+本机把桌宠从「源码 dev 实例」切成**官方安装版 v0.2.4**（`D:\Sorftware\Coopanion`）。搬过去的过程里值得记下来的：
+
+- **数据目录**：Windows 安装版的数据在**程序旁边** `<安装目录>\data`。选择顺序是
+  `CORTICO_COMPANION_DATA` 环境变量 → 程序旁边的 `data\` → `%LOCALAPPDATA%\Coopanion\data-location.json`
+  里记的那份（`app/data-dir.cjs` 的 `locateData`）。规则里「程序旁边的 `data\` 最优先」，所以
+  **先把旧实例的 `data\home` 与 `data\extensions` 拷进 `<安装目录>\data` 再首次启动**，桌宠第一次睁眼就是原来的样子
+  （配置、记忆、角色、原生端点凭证全在）。安装器不碰 `data\`（`installer/nsis.nsh` 的 `customRemoveFiles`
+  只删 Electron 自己的文件；卸载也保留 `data\`）。
+- **扩展怎么进官方版**：`extensions\package.json` 的 `dependencies` + `extensions\node_modules\<包名>`，
+  两处齐了框架才认（`cortico` 的 `src/extensions.ts` 里 `readInstalled` 只读 dependencies 的键，再按包名去
+  `node_modules` 找）。dev 实例里用的是 `link:` 软链；官方版里改成**真拷贝**——仓库可以搬/删，
+  链接一旦指错桌宠下次就没有这一页。拷贝交给 `scripts/sync-extension-to-app.mjs`。
+- **路由变了（v0.2.x）**：控制台清单 `/api/console/manifest` → **`/api/webui/manifest`**；面板方法
+  `/api/console/providers/<页>/panels/<面板>/<方法>` → **`/api/webui/providers/…`**（且只认 `POST`，
+  `GET` 回 405）；设置窗口的页面从 `/` 挪到 **`/coopanion/<hash>`**；`/api/figures` 这类旧路由在新版 404。
+  于是 `scripts/verify-instance.mjs` 改成两条路由都试（先 webui，404 再退老路），
+  `extension/scripts/check-panel-render.mjs` 改成**按侧栏文案点「用量额度」**进入（老版本退回带 hash 直进），
+  面板产物地址也从 manifest 里读，不再写死版本号。
+- **旧契约仍能用**：`cortico.api: 5` 的扩展在 v0.2.4 上照常加载（v0.2.0 发布说明：按旧接口写的扩展照常加载，
+  Cortico 下一个大版本起不再加载）。实测这一页、两个灯、五个徽章、两个页签、`state` 数据面全部正常。
+- **含中文的 .ps1 必须带 UTF-8 BOM**：PowerShell 5.1 默认按 ANSI 读脚本，无 BOM 的中文会让它在字符串处报
+  `TerminatorExpectedAtEndOfString`。`scripts/create-shortcut-to-app.ps1` 就是这么修好的。
+- **改名整个仓库目录的坑**：`mv` 会 `Device or resource busy`——占着它的是我自己那个终端会话的**残留 bash**
+  （cwd 还在里面），PowerShell 的 `Move-Item` 同样失败。可行的办法是**分片搬**：先建新目录，再逐个 `mv`
+  子项（`.git`、`docs`、`extension`、`scripts`、`upstream`…）——子项在父目录里改名不受句柄影响。
+  搬完老目录只剩空壳，等那些 bash 退出后 `rmdir` 即可。
+- **改名后 dev 实例的软链会全断**：pnpm 在 `node_modules` 里放的是**绝对路径**的软链，仓库一改名，
+  `node_modules\electron`、`node_modules\cortico-world-desktop-pet` 之类全成断链（清单里还在，访问就报不存在）。
+  真身在 `node_modules\.pnpm\<包>@<版本>\node_modules\<包>`。修法是重跑一次 `CI=true pnpm install`；
+  `extension/scripts/check-panel-render.mjs` 现在会自己翻 `.pnpm` 找 electron，所以改名后仍能跑渲染检查。

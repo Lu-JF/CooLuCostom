@@ -30,7 +30,7 @@ npm run build
 ```bash
 cd <Cortico 检出>       # Pal-AI-Lab/Cortico @ e21a524
 pnpm install --ignore-scripts
-pnpm check:extension D:/Work_AI/Coopanion-Usage/extension
+pnpm check:extension D:/Work_AI/CooLuCostom/extension
 ```
 
 结果：
@@ -91,7 +91,7 @@ node extension/scripts/check-panel-render.mjs 17788 <electron.exe>
 
 ## 4. 搬家后的复验（2026-10-13 21:0x）
 
-整个项目搬到 `D:\Work_AI\Coopanion-Usage\`（上游检出在 `upstream\coopanion`、`upstream\cortico`），
+整个项目搬到 `D:\Work_AI\CooLuCostom\`（上游检出在 `upstream\coopanion`、`upstream\cortico`），
 实例从新路径 `pnpm run dev` 起来后重跑了两项：
 
 - `node scripts/verify-instance.mjs 17788 --alerts` → 14 项全过，读数照旧（套餐 GOAT · 本月余 $53.84 ·
@@ -252,3 +252,42 @@ verify-instance → 12 项全过（含「两个页签声明在」「配置不再
   （没用过官方 CLI 登录）。面板走的是「用桌宠端点那把 Key 问 whoami」，见 `docs/VENDORS.md`。
 - **浏览器缓存**：面板产物的 URL 里带的是包版本（`0.1.0`），没有内容哈希；改完面板要重启进程，
   必要时强刷控制台（普通扩展由框架按版本分配 URL，内建 World 才带内容哈希）。
+
+## 13. 迁移到官方安装版 v0.2.4（2026-10-18）
+
+目标：装官方安装版，把功能、形象、记忆、配置整套搬过去；顺手把项目目录从 `Coopanion-Usage` 改成 `CooLuCostom`。
+
+做法：先把旧实例的 `data\home`（8.9 MB：`companion/config.json` 里的 `skin.figure=whale`、`companion/workspace`
+的记忆、`companion/data/quota/accounts.json`、`providers/CommandCode`）与 `data\extensions`（我们那个包）
+预置到 `D:\Sorftware\Coopanion\data`，再静默安装 `Coopanion-Setup-0.2.4.exe /S /D=D:\Sorftware\Coopanion`，然后启动。
+
+```
+安装        → D:\Sorftware\Coopanion\Coopanion.exe（245 MB，NSIS 未签名）✓；预置的 data\ 未被安装器动过 ✓
+首启        → 12 秒后控制台 127.0.0.1:17788 200 ✓
+              日志：World 已启动: console / desktop-pet / coopanion / quota ✓
+数据继承    → /api/status：displayName=Coo，modelConnection=CommandCode（api.commandcode.ai/provider/v1）ready=true，
+              loop.messageCount=355（历史会话带过来了）✓
+形象        → config.json: figure=whale / scheme=deepseek / outfit=maid ✓；桌宠页 7797 200 ✓
+扩展        → /api/extensions: cortico-world-quota@0.1.5 loaded=true ✓
+              /api/webui/manifest: world:quota availability=active；lamps=2（Command Code 在线 / Hermes 用量）；
+              badges=5（套餐 GOAT / 账号 1 / 5 小时 1% / 本周 2% / 本月余额 $69.43）；panels=quota,settings ✓
+自检        → node scripts/verify-instance.mjs 17788 → 12 项全过 ✓
+              （「控制台页 world:quota 在 manifest 里 — 200 /api/webui/manifest」「面板产物可取 —
+              /assets/extensions/cortico-world-quota/0.1.5/console.js 200, 29.8 KB」
+              「密钥来源 — account:test@gmail.com · CORTICO_KEY_COMMANDCODE」）
+渲染检查    → 13 项全过 ✓：6 张卡、额度进度条 3 条、价目表只留「月额度 $」、账号/供应商/模型/价目四卡都在、
+              「配置」页签 1 个保存按钮 + 3 个路径选择器、面板产物请求 200
+同步脚本    → node scripts/sync-extension-to-app.mjs → 重新构建并拷进官方版 ✓（dist/console.js 29.8 KB）
+快捷方式    → 桌面「桌宠 Coo.lnk」→ D:\Sorftware\Coopanion\Coopanion.exe ✓（安装器自带的 Coopanion.lnk 同指）
+改名        → D:\Work_AI\Coopanion-Usage → D:\Work_AI\CooLuCostom（分片搬；首提交 b836e7f 完好）；
+              仓内 8 处写死路径已改；dev 实例里的扩展链接已重指新路径 ✓
+```
+
+这次没验证到的：
+
+- 官方版托盘的**开机自动启动**开关（现在可点了，但点它属于界面操作，我没替你点）；
+- `--background` 参数在新版是否真「静默起在托盘」：源码里只有写入处、没有判断处（旧版如此，新版未复读）；
+- 官方版对**旧契约扩展**的长期态度：v0.2.0 说明写「Cortico 下一个大版本起不再加载」，届时要把 `cortico.api`
+  升到新号并对齐接口；
+- 日志里出现过一条 `Provider attempt failed; retrying { err: 'Delta before content part' }`（新版 responses
+  兼容模块的一次重试），没有复现，先记着。

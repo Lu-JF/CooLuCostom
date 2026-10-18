@@ -1,6 +1,24 @@
 # 装进 Coopanion
 
-扩展包在 `../extension`（包名 `cortico-world-quota`，World id `quota`）。装之前先构建面板产物：
+扩展包在 `../extension`（包名 `cortico-world-quota`，World id `quota`）。
+
+## 0. 官方安装版（推荐，一条命令）
+
+```bash
+# 从官方 releases 装（本机已装在 D:\Sorftware\Coopanion；静默指定目录：/S /D=<目录>）
+# 然后把扩展构建好并拷进去：
+node scripts/sync-extension-to-app.mjs                # 默认 D:\Sorftware\Coopanion
+```
+
+`sync-extension-to-app.mjs` 做三件事：构建面板产物 → 拷 `extension/`（不含 node_modules）到
+`<应用>\data\extensions\node_modules\cortico-world-quota` → 在 `<应用>\data\extensions\package.json`
+的 `dependencies` 里登记这个包名。**框架是按这份 dependencies + `node_modules\<包名>` 找扩展的**，缺一处就不加载。
+装完在托盘点「重启」，左栏高级模式的 WORLD 组里就会出现「用量额度」。
+
+官方版的数据在**程序旁边的 `data\`**：`data\home`（配置、记忆、角色、原生端点凭证）与 `data\extensions`（扩展）。
+把旧实例的这两块拷过来就是「整只搬过去」。下面的步骤是把扩展装进**源码实例**的另一条路。
+
+## 1. 源码实例里的安装（`pnpm run dev` 那一只）
 
 ```bash
 cd ../extension
@@ -11,19 +29,17 @@ npm run build      # 生成 dist/console.js 与 dist/console.css
 `dist/` 是面板 bundle，manifest 的 `cortico.consoleClient` / `consoleStyle` 指的就是它。缺了它扩展页会
 说明「面板产物不在」，页面也就没有内容。
 
-## 1. 安装
-
 1. 打开 Coopanion 的设置窗口，左栏底部把它切到**高级模式**（普通模式左栏只列桌宠那几页，扩展页不在其中）。
 2. 进「扩展」页 → 手动安装 → 选**本机目录**，填这个包的绝对路径：
-   `D:\Work_AI\Coopanion-Usage\extension`
+   `D:\Work_AI\CooLuCostom\extension`
 3. 安装页会先做一次只读检查（类别、manifest、产物），通过后以 `link:` 方式装进
    `<安装目录>\data\extensions`，改源码重启即生效。
-4. 重启进程（安装页会提示「待重启」）。
+4. 重启进程（安装页会提示「待重启」）。V0.2.x 起，旧契约（`api: 5`）的包仍会加载，扩展页会标注「按旧契约编写」。
 
 命令行的等价做法（在 `<安装目录>\data\extensions` 里）：
 
 ```bash
-pnpm add --ignore-workspace link:D:/Work_AI/Coopanion-Usage/extension
+pnpm add --ignore-workspace link:D:/Work_AI/CooLuCostom/extension
 ```
 
 ## 2. 启用
@@ -37,7 +53,7 @@ pnpm add --ignore-workspace link:D:/Work_AI/Coopanion-Usage/extension
 
 ## 3. 密钥与路径
 
-页面对话框全部在「提醒」卡下方，也可以在「用量额度」页的配置组里改（都写进 `worlds.quota`）：
+页面里的【配置】页签是扩展自己画的（表单填完点【保存】一次写回，不走框架那种边打边存）：
 
 | 项 | 默认 | 说明 |
 |---|---|---|
@@ -62,8 +78,10 @@ pnpm add --ignore-workspace link:D:/Work_AI/Coopanion-Usage/extension
 
 | 现象 | 看哪里 |
 |---|---|
+| 官方版里看不到这一页 | 先 `node scripts/sync-extension-to-app.mjs`，再托盘点「重启」；确认左栏是高级模式 |
+| 自检脚本报 404 | 路由随版本变：v0.2.x 是 `/api/webui/manifest`，更早是 `/api/console/manifest`，`verify-instance.mjs` 两条都会试 |
 | 扩展页显示「需要升级」 | 运行时的契约号变了，见根 README 最后一节 |
 | 卡片写「取不到（command code rejected the key）」 | 密钥过期或换了：改 `worlds.quota.commandcodeKey`，或在 CLI 里重新登录 |
 | 卡片写「读不到 Hermes 的用量库」 | `state.db` 不在默认位置：填 `hermesHome`（Hermes 的 `hermes dump` 会打印它的 home） |
 | 页面在左栏里找不到 | 还在普通模式；或 World 没启用 |
-| 改了源码没生效 | `npm run build` 之后重启进程（面板 bundle 有哈希，重启才会换） |
+| 改了源码没生效 | 源码实例：`npm run build` 后重启进程；官方版：先升 `extension/package.json` 的 version（产物地址带版本号，浏览器缓存是 immutable），再跑 `sync-extension-to-app.mjs`，然后重启 |

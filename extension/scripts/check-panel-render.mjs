@@ -2,21 +2,52 @@
  * 在真控制台里看一眼这个面板画出来没有：起一个最小的 Electron 窗口打开控制台的这一页，
  * 经 CDP 读它的 DOM。用的是 Coopanion 自带的那份 Electron（不下载浏览器）。
  *
- *   node scripts/check-panel-render.mjs <控制台端口> <electron.exe 路径>
+ *   node scripts/check-panel-render.mjs <控制台端口> [electron.exe 路径]
  *
- * 例：node scripts/check-panel-render.mjs 17788 D:/Work_AI/tools/_tmp/coop/node_modules/electron/dist/electron.exe
+ * 例：node scripts/check-panel-render.mjs 17788
+ *     （不给路径时自己在仓库里找：node_modules/electron/dist，找不到再翻 .pnpm/electron@<版本>）
  *
  * 读的是页面文本与几个结构性节点（进度条、表格行、卡片标题），确认面板挂上了、拿到数据、
  * 没有把宿主原语用错——这些在 jsdom 的替身里过得了、在真宿主里未必。
  */
 import { spawn } from 'node:child_process';
+import { existsSync, readdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * 找一只 Electron 运行时当浏览器用。给的路径可能失效：pnpm 的软链写的是**绝对路径**，
+ * 仓库改过目录名之后 `node_modules/electron` 就成了断链，而真身在 `.pnpm/electron@<版本>/…/dist`。
+ * 于是：给的路径不存在时，自己在仓库里找一遍。
+ */
+function resolveElectron(given) {
+  if (given && existsSync(given)) return given;
+  const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const roots = [
+    join(repo, 'upstream', 'coopanion', 'node_modules'),
+    join(repo, 'upstream', 'cortico', 'node_modules'),
+  ];
+  for (const root of roots) {
+    const direct = join(root, 'electron', 'dist', 'electron.exe');
+    if (existsSync(direct)) return direct;
+    const pnpm = join(root, '.pnpm');
+    if (!existsSync(pnpm)) continue;
+    for (const entry of readdirSync(pnpm)) {
+      if (!entry.startsWith('electron@')) continue;
+      const hit = join(pnpm, entry, 'node_modules', 'electron', 'dist', 'electron.exe');
+      if (existsSync(hit)) return hit;
+    }
+  }
+  if (given) console.error(`给的 electron 路径不存在：${given}`);
+  console.error('用法: node scripts/check-panel-render.mjs <端口> [electron.exe 路径]');
+  process.exit(2);
+}
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { chromium } from 'playwright-core';
 
 const port = process.argv[2] ?? '17788';
-const electronPath = process.argv[3];
+const electronPath = resolveElectron(process.argv[3]);
 const DEBUG_PORT = '9223';
 if (!electronPath) {
   console.error('用法: node scripts/check-panel-render.mjs <端口> <electron.exe>');
@@ -89,10 +120,32 @@ try {
     }
   });
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'domcontentloaded' });
-  // 先让控制台自己起来（首屏落在「开始」），再带 hash 进这一页；直接带 hash 首开会停在别处。
+  // 先让控制台自己起来（首屏落在「开始」），再进这一页；直接带 hash 首开会停在别处。
   await page.waitForSelector('#kernel-root', { timeout: 30_000 });
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.quota-shell', { timeout: 30_000, state: 'attached' });
+  // 进这一页有两种方式：新版靠侧栏点「用量额度」（高级模式的 WORLD 组），老版可以直接带 hash。
+  const clickByText = async (want, tags = 'a, button, li, [role="tab"], .navitem, .tab') =>
+    page.evaluate(
+      ({ text, sel }) => {
+        const hit = [...document.querySelectorAll(sel)].find((el) => (el.textContent ?? '').trim() === text);
+        if (!hit) return false;
+        hit.click();
+        return true;
+      },
+      { text: want, sel: tags },
+    );
+  const clicked = await clickByText('用量额度');
+  let mounted = false;
+  if (clicked) {
+    mounted = await page
+      .waitForSelector('.quota-shell', { timeout: 20_000, state: 'attached' })
+      .then(() => true)
+      .catch(() => false);
+  }
+  if (!mounted) {
+    // 点不到（老版本侧栏结构不同、或语言不是中文）：退回带 hash 直进
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.quota-shell', { timeout: 30_000, state: 'attached' });
+  }
   await page.waitForFunction(
     () => (document.querySelector('.quota-shell')?.textContent ?? '').includes('GOAT'),
     null,
@@ -169,8 +222,11 @@ try {
   console.log(`    面板产物请求：${bundleHits.join(' | ') || '（页面没请求扩展产物）'}`);
   console.log(`    卡节点：${JSON.stringify(data.cardsHtml)}`);
   console.log(`    页面里有「添加账号」：${data.bodyHasAccounts}；.quota-shell 个数：${data.shells}`);
-  const inPage = await page.evaluate(async () => {
-    const url = '/assets/extensions/cortico-world-quota/0.1.0/console.js';
+  const bundleUrl = (await fetch(`http://127.0.0.1:${port}/api/webui/manifest`)
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null))?.providers?.find?.((p) => p.id === 'world:quota')?.client?.js
+    ?? '/assets/extensions/cortico-world-quota/0.1.5/console.js';
+  const inPage = await page.evaluate(async (url) => {
     try {
       const res = await fetch(url, { cache: 'no-store' });
       const text = await res.text();
@@ -178,8 +234,8 @@ try {
     } catch (err) {
       return { error: String(err) };
     }
-  });
-  console.log(`    页面内取产物：${JSON.stringify(inPage)}`);
+  }, bundleUrl);
+  console.log(`    页面内取产物（${bundleUrl}）：${JSON.stringify(inPage)}`);
 
   const shotAt = process.argv.indexOf('--shot');
   if (shotAt !== -1 && process.argv[shotAt + 1]) {

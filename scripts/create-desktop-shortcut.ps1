@@ -3,7 +3,7 @@
 $ErrorActionPreference = 'Stop'
 $decode = { param($b64) [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b64)) }
 
-$repo    = 'D:\Work_AI\Coopanion-Usage'
+$repo    = 'D:\Work_AI\CooLuCostom'
 $target  = Join-Path $env:SystemRoot 'System32\wscript.exe'
 $vbsArgs = '"' + (Join-Path $repo 'scripts\start-pet.vbs') + '"'
 $icon    = Join-Path $repo 'upstream\coopanion\app\icons\icon.ico'
