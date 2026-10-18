@@ -1,0 +1,139 @@
+/* 面板自己的几处间距；卡片、进度条、表格都用控制台自带样式。 */
+.quota-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quota-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quota-body + .quota-body {
+  margin-top: 12px;
+}
+
+.quota-note,
+.quota-bar-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quota-bar-label {
+  margin-right: 8px;
+}
+
+.quota-shell .progress {
+  margin-bottom: 4px;
+}
+
+/* 添加账号的表单：跟表头隔开一条线，收起时不占位置。 */
+.quota-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* 表格里的操作按钮：一行排开。 */
+.quota-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/*
+ * 控制台的页面作用域把 .btn 重定义成 background/border 全透明（只靠 hover 变色），
+ * 在表格里就看着像普通文字。这里给回一眼能看出是按钮的样子：浅填充 + 可见描边 + 一点阴影，
+ * 颜色全部用主题变量混出来，浅色/深色主题都不会跑偏。
+ */
+.quota-shell .btn {
+  min-height: 30px;
+  padding: 5px 12px;
+  background: color-mix(in srgb, var(--foreground, var(--ink)) 8%, var(--surface, var(--sheet)));
+  color: var(--foreground, var(--ink));
+  border: 1px solid color-mix(in srgb, var(--foreground, var(--ink)) 26%, transparent);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground, var(--ink)) 12%, transparent);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.quota-shell .btn:hover {
+  background: color-mix(in srgb, var(--foreground, var(--ink)) 15%, var(--surface, var(--sheet)));
+  border-color: color-mix(in srgb, var(--foreground, var(--ink)) 42%, transparent);
+}
+
+.quota-shell .btn:active {
+  box-shadow: none;
+  transform: translateY(1px);
+}
+
+.quota-shell .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.quota-shell .btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+  border-color: color-mix(in srgb, var(--accent) 88%, #000);
+}
+
+.quota-shell .btn.danger {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.quota-shell .btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: var(--danger);
+}
+
+.quota-shell .btn:disabled {
+  opacity: 0.45;
+}
+
+/* 账号那一格：名字在上面，来源/在用的标记在下面。 */
+.quota-account {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quota-account .quota-actions {
+  justify-content: flex-start;
+}
+
+/* 「配置」页签：路径输入框 + 「选择…」按钮 并排。 */
+.quota-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.quota-field-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.quota-field-row .rowbar {
+  flex: 0 0 auto;
+}
+
+/* 「配置」页签里的小节标题。 */
+.quota-group {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground, var(--muted));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
