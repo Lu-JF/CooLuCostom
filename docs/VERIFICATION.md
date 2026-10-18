@@ -30,7 +30,7 @@ npm run build
 ```bash
 cd <Cortico 检出>       # Pal-AI-Lab/Cortico @ e21a524
 pnpm install --ignore-scripts
-pnpm check:extension D:/Work_AI/CooLuCostom/extension
+pnpm check:extension D:/Work_AI/Git_Lu/CooLuCostom/extension
 ```
 
 结果：
@@ -91,7 +91,7 @@ node extension/scripts/check-panel-render.mjs 17788 <electron.exe>
 
 ## 4. 搬家后的复验（2026-10-13 21:0x）
 
-整个项目搬到 `D:\Work_AI\CooLuCostom\`（上游检出在 `upstream\coopanion`、`upstream\cortico`），
+整个项目搬到 `D:\Work_AI\Git_Lu\CooLuCostom\`（上游检出在 `upstream\coopanion`、`upstream\cortico`），
 实例从新路径 `pnpm run dev` 起来后重跑了两项：
 
 - `node scripts/verify-instance.mjs 17788 --alerts` → 14 项全过，读数照旧（套餐 GOAT · 本月余 $53.84 ·
@@ -279,7 +279,7 @@ verify-instance → 12 项全过（含「两个页签声明在」「配置不再
               「配置」页签 1 个保存按钮 + 3 个路径选择器、面板产物请求 200
 同步脚本    → node scripts/sync-extension-to-app.mjs → 重新构建并拷进官方版 ✓（dist/console.js 29.8 KB）
 快捷方式    → 桌面「桌宠 Coo.lnk」→ D:\Sorftware\Coopanion\Coopanion.exe ✓（安装器自带的 Coopanion.lnk 同指）
-改名        → D:\Work_AI\Coopanion-Usage → D:\Work_AI\CooLuCostom（分片搬；首提交 b836e7f 完好）；
+改名        → D:\Work_AI\Coopanion-Usage → D:\Work_AI\Git_Lu\CooLuCostom（分片搬；首提交 b836e7f 完好）；
               仓内 8 处写死路径已改；dev 实例里的扩展链接已重指新路径 ✓
 ```
 

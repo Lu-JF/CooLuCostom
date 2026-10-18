@@ -21,7 +21,7 @@
 程序换了目录时它会按 `%LOCALAPPDATA%\Coopanion\data-location.json` 问「继承之前的数据还是新建一只」。
 
 ```
-D:\Work_AI\CooLuCostom\
+D:\Work_AI\Git_Lu\CooLuCostom\
 ├─ extension\            # 扩展包 cortico-world-quota，装进 Coopanion 的就是它
 │  ├─ src\index.ts       # WorldDefinition 入口
 │  ├─ src\world.ts       # 取数、阈值判定、提醒事件、控制台声明、两个工具、账号与价目数据面

@@ -31,7 +31,7 @@ npm run build      # 生成 dist/console.js 与 dist/console.css
 
 1. 打开 Coopanion 的设置窗口，左栏底部把它切到**高级模式**（普通模式左栏只列桌宠那几页，扩展页不在其中）。
 2. 进「扩展」页 → 手动安装 → 选**本机目录**，填这个包的绝对路径：
-   `D:\Work_AI\CooLuCostom\extension`
+   `D:\Work_AI\Git_Lu\CooLuCostom\extension`
 3. 安装页会先做一次只读检查（类别、manifest、产物），通过后以 `link:` 方式装进
    `<安装目录>\data\extensions`，改源码重启即生效。
 4. 重启进程（安装页会提示「待重启」）。V0.2.x 起，旧契约（`api: 5`）的包仍会加载，扩展页会标注「按旧契约编写」。
@@ -39,7 +39,7 @@ npm run build      # 生成 dist/console.js 与 dist/console.css
 命令行的等价做法（在 `<安装目录>\data\extensions` 里）：
 
 ```bash
-pnpm add --ignore-workspace link:D:/Work_AI/CooLuCostom/extension
+pnpm add --ignore-workspace link:D:/Work_AI/Git_Lu/CooLuCostom/extension
 ```
 
 ## 2. 启用
