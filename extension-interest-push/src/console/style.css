@@ -1,0 +1,78 @@
+/* 兴趣推送面板：只补框架样式没覆盖的几块（条目行、摘要块、期刊行）。 */
+.ip-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ip-row:hover {
+  background: var(--accent);
+}
+
+.ip-rowhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ip-title {
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.ip-meta {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ip-detail {
+  margin-bottom: 8px;
+}
+
+.ip-abstract,
+.ip-translation {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+}
+
+.ip-tr {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ip-jrows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ip-jrow {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr 1.6fr 1.4fr 0.6fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.ip-jrow input {
+  min-width: 0;
+}

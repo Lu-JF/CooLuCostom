@@ -1,0 +1,30 @@
+{
+  "name": "cortico-world-interest-push",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "keywords": [
+    "cortico-world"
+  ],
+  "main": "./src/index.ts",
+  "cortico": {
+    "kind": "world",
+    "api": 5,
+    "displayName": "兴趣推送",
+    "consoleClient": "dist/console.js",
+    "consoleStyle": "dist/console.css"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "vitest run",
+    "build": "node scripts/build-console.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "cortico": "^0.1.13",
+    "esbuild": "^0.25.0",
+    "jsdom": "^30.1.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}
