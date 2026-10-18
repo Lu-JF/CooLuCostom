@@ -185,6 +185,53 @@ Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定�
 字符串处报语法错误。仓库目录改名后，pnpm 在 `node_modules` 中创建的绝对路径软链会全部失效，实际文件位于
 `.pnpm` 目录下，重新执行一次 `pnpm install` 可修复。
 
+## 兴趣推送实现要点
+
+### 取数
+
+- **Crossref 用记录创建日期**：期刊常把期号日期标到明年，`filter=from-pub-date` 与 `sort=published`
+  会把一堆未来日期顶到列表最前。改用 `from-created-date` / `until-created-date` 与 `sort=created`，
+  展示日期优先 `published-online`，其次 `created`，最后才 `issued`。
+- **Elsevier 不给摘要**：Crossref 的 `abstract` 字段对 EAAI、Measurement、Applied Soft Computing、
+  Expert Systems with Applications 等普遍为空，OpenAlex 对新文章也常没有。因此按 DOI 两级回填：
+  先 OpenAlex（一次可查 25 个 DOI 的倒排索引），再 Semantic Scholar（一次 POST 最多 500 个 DOI）。
+  两处都没有的条目在列表里标「无摘要」，推送时优先挑有摘要的。
+- **arXiv 分类 RSS 不接受检索式**：`rss.arxiv.org/rss/<cat>` 只给该分类当日新条目，关键词加在 query 上会被忽略，
+  周末还是空的。改用 `export.arxiv.org/api/query`，按 `all:"短语"` 之间 OR 检索、按提交时间排序。
+- **Hugging Face 日榜是整条 AI 榜单**：不加过滤会把 40 条通用 AI 论文灌进列表。`relevance.ts` 做相关性判定
+  （命中关键词短语，或两个以上关键词词根，或两个以上领域兜底词），实测把 39 条压到 3 条。
+
+### 调度
+
+- 检查与打扰分开：`checkTimer` 按 `checkMinutes` 抓取只更新列表；`pushTimer` 只在下一次推送时刻到点触发，
+  到点才走 `schedule.decide`（静默时段、星期、每日上限、同窗口只推一次、暂停全部在这里挡）。
+  只用一个定时器会漏窗口——检查间隔若不落在窗口内，推送永远不会发生。
+- `state.json` 里的 `answerCursor` 记录读到哪条事件；收到 `desktop-pet.answer` 回执时，用事件库往前找最近的
+  `news.item` 认领归属，命中「不感兴趣」一类的词就把它记进 `dismissed`，不再推送。
+
+### 翻译
+
+- 用桌宠自己配置的模型端点，读法同用量额度扩展：`<botDir>/config.json` 的 `activeProvider` 指向
+  `<botDir>/../providers/<端点>/config.json` 与同目录 `.env`。**providers 在 botDir 旁边而不是里面**，
+  只找 `<botDir>/providers` 会一直报「找不到可用的模型端点」。
+- 请求体 `POST {baseUrl}/responses`，`input` 用 `[{ role, content: [{ type: 'input_text', text }] }]`。
+  响应里推理与正文是两类 item：`{type:'reasoning', content:[{type:'reasoning_text'}]}` 与
+  `{type:'message', content:[{type:'output_text'}]}`。只取后者——先前的实现把所有 item 的文本拼起来，
+  译文里混进了模型的思考过程。
+- 译文按条目落盘，缓存键是「提示词版本 + 模型 + 术语表哈希」：改术语表或换模型会自动重译，改提示词措辞时
+  手动提升 `PROMPT_VERSION`。
+- 摘要下载非开放获取时不给 PDF：`pdfUrl` 只在源明确给出可公开取的 PDF（arXiv、PMC、DOAJ 或 `.pdf` 直链）
+  时才填，其余给「打开原文」，不绕付费墙。
+
+### 面板
+
+- 每页面板的数据面方法走 `POST /api/webui/providers/<页>/panels/<面板>/<方法>`，**请求体是 `{ args: [...] }`**，
+  不是裸数组；裸数组会被当成空参数（调试时容易误判成「方法没生效」）。
+- 面板只能调自己那页的方法：把「立即检查一次」「立刻推一条」放在 `invoke` 顶端对三个页签统一放行，
+  而不是让列表页去调配置页的方法。
+- 列表页点击条目后，尽力把 hash 切到详情页签（`#/provider/<页>/<面板>`）；切不过去也不影响使用，
+  详情页签自带条目下拉。
+
 ## 隐私约定
 
 仓库内的文档与测试夹具统一使用 `test@gmail.com` 与 `C:\Users\user\...` 作为占位值，不包含真实账号邮箱与本机

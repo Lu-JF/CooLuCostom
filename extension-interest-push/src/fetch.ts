@@ -98,6 +98,78 @@ function parseArxivRss(xml: string): Array<{ title: string; link: string; summar
   return items;
 }
 
+/** 把 OpenAlex 的 `abstract_inverted_index` 还原成文本。 */
+export function invertAbstract(index: unknown): string {
+  if (!index || typeof index !== 'object') return '';
+  const pairs: Array<[number, string]> = [];
+  for (const [word, positions] of Object.entries(index as Record<string, unknown>)) {
+    if (!Array.isArray(positions)) continue;
+    for (const at of positions) {
+      if (Number.isFinite(Number(at))) pairs.push([Number(at), word]);
+    }
+  }
+  pairs.sort((a, b) => a[0] - b[0]);
+  return pairs.map(([, word]) => word).join(' ').trim();
+}
+
+/**
+ * 按 DOI 批量补摘要（OpenAlex，免费）。
+ * Crossref 里 Elsevier 等出版社常不存摘要，这一层把缺的补上；单批失败只跳过这一批。
+ */
+export async function fetchOpenAlexAbstracts(dois: string[], deps: FetchDeps): Promise<Record<string, string>> {
+  const doFetch = resolveFetch(deps);
+  const out: Record<string, string> = {};
+  const clean = [...new Set(dois.map((d) => d.trim().toLowerCase()).filter((d) => d !== ''))].slice(0, 60);
+  for (let i = 0; i < clean.length; i += 25) {
+    const chunk = clean.slice(i, i + 25);
+    try {
+      const filter = encodeURIComponent(`doi:${chunk.join('|')}`);
+      const url = `https://api.openalex.org/works?filter=${filter}&per-page=50&select=doi,abstract_inverted_index&mailto=${encodeURIComponent(deps.mailto)}`;
+      const res = await doFetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { results?: unknown[] };
+      for (const row of body?.results ?? []) {
+        const r = (row ?? {}) as Record<string, unknown>;
+        const doi = String(r.doi ?? '').replace(/^https?:\/\/doi\.org\//i, '').toLowerCase();
+        const text = invertAbstract(r.abstract_inverted_index);
+        if (doi !== '' && text !== '') out[doi] = text;
+      }
+    } catch {
+      /* 这一批失败就跳过 */
+    }
+  }
+  return out;
+}
+
+/**
+ * 按 DOI 批量补摘要（Semantic Scholar，一次 POST 最多 500 个 DOI）。
+ * Elsevier 等出版社在 Crossref 与 OpenAlex 里都没有摘要，这一层是最后一道兜底。
+ */
+export async function fetchSemanticScholarAbstracts(dois: string[], deps: FetchDeps): Promise<Record<string, string>> {
+  const doFetch = resolveFetch(deps);
+  const out: Record<string, string> = {};
+  const clean = [...new Set(dois.map((d) => d.trim()).filter((d) => d !== ''))].slice(0, 200);
+  if (clean.length === 0) return out;
+  try {
+    const res = await doFetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=abstract', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Accept: 'application/json', 'User-Agent': `interest-push/0.1 (mailto:${deps.mailto})` },
+      body: JSON.stringify({ ids: clean.map((d) => `DOI:${d}`) }),
+    });
+    if (!res.ok) return out;
+    const rows = (await res.json()) as unknown;
+    if (!Array.isArray(rows)) return out;
+    rows.forEach((row, at) => {
+      const text = String((row as Record<string, unknown> | null)?.abstract ?? '').replace(/\s+/g, ' ').trim();
+      const doi = clean[at];
+      if (doi !== undefined && text !== '') out[doi.toLowerCase()] = text;
+    });
+  } catch {
+    /* 整批失败就跳过 */
+  }
+  return out;
+}
+
 /**
  * 抓一个期刊的最新作品（Crossref）。
  * 出错返回空数组；关键词为空时去掉 `query.bibliographic`。
@@ -109,12 +181,14 @@ export async function fetchJournal(
   const doFetch = resolveFetch(deps);
   try {
     const from = daysAgo(input.days);
+    const until = daysAgo(0);
     const params = new URLSearchParams();
-    params.set('filter', `from-pub-date:${from}`);
+    // 按记录创建日期筛与排序：期刊常把期号标到明年，按期号会顶出一堆未来日期。
+    params.set('filter', `from-created-date:${from},until-created-date:${until}`);
     params.set('rows', String(input.rows));
-    params.set('sort', 'published');
+    params.set('sort', 'created');
     params.set('order', 'desc');
-    params.set('select', 'DOI,title,author,container-title,abstract,issued,URL,link');
+    params.set('select', 'DOI,title,author,container-title,abstract,issued,created,published-online,URL,link');
     const keywords = input.keywords.map((k) => k.trim()).filter(Boolean);
     if (keywords.length) params.set('query.bibliographic', keywords.join(' '));
     params.set('mailto', deps.mailto);
@@ -131,7 +205,7 @@ export async function fetchJournal(
     const items = body?.message?.items;
     if (!Array.isArray(items)) return [];
     const tier = DEFAULT_JOURNALS.find((j) => j.issn === input.issn)?.tier ?? null;
-    return items.map((item) => normalizeCrossref(item, { issn: input.issn, tier, query: from }));
+    return items.map((item) => normalizeCrossref(item, { issn: input.issn, tier, query: `created:${from}` }));
   } catch {
     return [];
   }

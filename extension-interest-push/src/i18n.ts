@@ -22,6 +22,7 @@ export interface InterestText {
     empty: string;
     unread: string;
     read: string;
+    noAbstract: string;
     dismissed: string;
     error: (reason: string) => string;
     hint: string;
@@ -117,6 +118,7 @@ const zh: InterestText = {
     empty: '还没有抓到条目。检查一次，或把关键词和期刊放宽些。',
     unread: '未读',
     read: '已读',
+    noAbstract: '无摘要',
     dismissed: '不再推送',
     error: (reason) => `上次检查出错：${reason}`,
     hint: '订阅的论文会以气泡对话介绍；详情在这里看。',
@@ -212,6 +214,7 @@ const en: InterestText = {
     empty: 'Nothing crawled yet. Run a check, or widen the keywords and journals.',
     unread: 'unread',
     read: 'read',
+    noAbstract: 'no abstract',
     dismissed: 'not pushed again',
     error: (reason) => `Last check failed: ${reason}`,
     hint: 'Subscribed papers are introduced in a bubble chat; details live here.',

@@ -141,6 +141,37 @@ cd extension && node scripts/check-panel-render.mjs <端口> [electron.exe]   # 
 除上述请求外不产生其他网络访问，不包含遥测。面板中手动添加的密钥经框架的秘密存储写入部署目录的 `.env`，
 变量名形如 `QUOTA_COMMANDCODE_1`；账号表仅保存变量名与密钥尾四位。
 
+## 兴趣推送扩展
+
+第二个扩展包 `extension-interest-push`，包名 `cortico-world-interest-push`，World id 为 `interest-push`，
+控制台显示名「兴趣推送」。它按设定节奏从学术数据源抓取研究方向的论文，把命中的条目用**气泡多轮对话**介绍，
+详情留在控制台的三个页签里自己看。
+
+| 页签 | 内容 |
+|---|---|
+| 列表 | 抓到的条目（标题、期刊与分区、上线日期、来源、未读标记），点一条即标记已读 |
+| 详情 | 标题、作者与团队、期刊与分区、上线日期、DOI、**爬取源**、原文摘要、中文译文、打开原文、下载原文 |
+| 配置 | 推送节奏、关键词、期刊集合、arXiv 分类、翻译术语表、下载目录；填完点「保存」一次性写回，另有「立即检查一次」与「立刻推一条（试）」 |
+
+数据源与取法：
+
+| 源 | 取法 | 说明 |
+|---|---|---|
+| 期刊 | Crossref `journals/<ISSN>/works` | 默认 28 家（中科院一区与 JCR Q1），按**记录创建日期**筛选排序，按期号日期会顶出一堆未来日期 |
+| arXiv | `export.arxiv.org/api/query` | 关键词按短语 OR 检索、按提交时间排序；分类 RSS 不接受检索式且周末不出新 |
+| 每日论文榜 | Hugging Face `api/daily_papers` | 整条 AI 榜单，用关键词做相关性过滤，只留研究领域相关的条目 |
+| 摘要回填 | OpenAlex，其次 Semantic Scholar | Elsevier 等出版社在 Crossref 不存摘要，两级兜底；补上的会在「爬取源」里注明 |
+| 翻译 | 桌宠自己配置的模型端点 | `POST {baseUrl}/responses`，**不带人设**，要求忠于原文并按术语表统一专有名词；译文落盘缓存 |
+
+推送节奏默认值：每小时 120 分钟间隔检查一次，只在 10:30 / 13:00 / 19:30 三个窗口打扰，每天最多 2 条，
+22:30–08:30 静默只检查不打扰，气泡对话最多 3 轮。全部可在「配置」页签里改。
+
+翻译的请求形状：Responses 体里推理与正文分成两类 item，只取 `type: 'message'` 的 `output_text`；
+把推理文本当译文返回过，`translate.ts` 里的 `extractText` 与单测固定了这条规则。
+
+运行数据落在部署数据目录的 `news/` 下：`items.json`（列表快照）、`seen.json`（去重）、
+`state.json`（已读、已推、窗口游标）、`translated/`（译文缓存）、`papers/`（下载的原文）。
+
 ## 与上游升级的关系
 
 扩展安装于 `<安装目录>\data\extensions`。安装包升级仅删除 Electron 自身文件，`data\` 目录保留，

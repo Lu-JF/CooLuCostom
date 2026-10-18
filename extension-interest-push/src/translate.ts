@@ -14,7 +14,7 @@ import { glossaryHash, parseGlossary } from './glossary.ts';
 import type { NewsItem, TranslationState } from './view-types.ts';
 
 /** 提示词版本；改动措辞时加一，缓存随之失效。 */
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;
 
 export interface TranslateDeps {
   dataDir: string;
@@ -90,28 +90,38 @@ function writeCache(dataDir: string, id: string, text: string, hash: string): vo
   }
 }
 
-/** 从 Responses 体里取正文，容忍几种形状。 */
+/**
+ * 从 Responses 体里取正文。
+ *
+ * 这一家的响应把推理与正文分成两类 item：`{type:'reasoning', content:[{type:'reasoning_text'}]}`
+ * 与 `{type:'message', content:[{type:'output_text'}]}`。只取后者——把推理文本当译文返回过。
+ * 另兼容 `output_text` 字段与 chat completions 形状。
+ */
 export function extractText(body: unknown): string {
   const b = (body ?? {}) as Record<string, unknown>;
-  if (typeof b.output_text === 'string' && b.output_text.trim() !== '') return b.output_text.trim();
   const out = b.output;
   if (Array.isArray(out)) {
     const parts: string[] = [];
     for (const item of out) {
-      const content = (item as Record<string, unknown>)?.content;
+      const rec = (item ?? {}) as Record<string, unknown>;
+      if (rec.type !== undefined && rec.type !== 'message') continue;
+      const content = rec.content;
       if (!Array.isArray(content)) continue;
       for (const c of content) {
-        const t = (c as Record<string, unknown>)?.text;
-        if (typeof t === 'string') parts.push(t);
+        const part = (c ?? {}) as Record<string, unknown>;
+        if (part.type !== undefined && part.type !== 'output_text') continue;
+        if (typeof part.text === 'string') parts.push(part.text);
       }
     }
-    if (parts.length > 0) return parts.join('').trim();
+    const text = parts.join('').trim();
+    if (text !== '') return text;
   }
+  if (typeof b.output_text === 'string' && b.output_text.trim() !== '') return b.output_text.trim();
   const choices = b.choices;
   if (Array.isArray(choices)) {
-    const first = choices[0] as Record<string, unknown> | undefined;
-    const msg = first?.message as Record<string, unknown> | undefined;
-    if (typeof msg?.content === 'string') return msg.content.trim();
+    const first = (choices[0] ?? {}) as Record<string, unknown>;
+    const msg = (first.message ?? {}) as Record<string, unknown>;
+    if (typeof msg.content === 'string') return msg.content.trim();
   }
   return '';
 }

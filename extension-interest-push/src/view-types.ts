@@ -30,6 +30,8 @@ export interface NewsRow {
   issued: string;
   source: NewsSource;
   unread: boolean;
+  /** 源是否给了摘要；没给的条目在列表里标出来，免得点进去才发现。 */
+  hasAbstract: boolean;
 }
 
 /** 译文状态。 */

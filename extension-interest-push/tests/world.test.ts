@@ -143,6 +143,43 @@ describe('推送与回执', () => {
     expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
   });
 
+  it('推送时优先挑有摘要的那条', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-pref-'));
+    const botDir = makeBotDir();
+    const log = { crossref: 0, model: 0 };
+    const withAbstract = { ...CROSSREF_ITEM, DOI: '10.1016/with-abstract', abstract: '<jats:p>Has an abstract.</jats:p>', issued: { 'date-parts': [[2026, 10, 2]] } };
+    const without = { ...CROSSREF_ITEM, DOI: '10.1016/no-abstract', abstract: '', issued: { 'date-parts': [[2026, 10, 3]] } };
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes('api.crossref.org')) {
+        return new Response(JSON.stringify({ message: { items: [without, withAbstract] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const cfg: InterestPushConfigSection = {
+      ...INTEREST_PUSH_DEFAULTS,
+      keywords: ['bearing fault diagnosis'],
+      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b', group: 'A' }],
+      pushTimes: ['10:30'],
+    };
+    const world = new InterestPushWorld({
+      cfg,
+      timezone: 'Asia/Shanghai',
+      dataDir,
+      botDir,
+      persist: (patch) => Object.assign(cfg, patch),
+      fetchImpl: fake,
+      now: () => FIXED,
+    });
+    const host = new FakeHost();
+    await world.start(host.asHost());
+    expect(world.view('zh').items).toHaveLength(2);
+    await world.invoke('settings', 'pushNow', [], 'zh');
+    const text = host.pushed.filter((e) => e.type === 'news.item')[0]?.text ?? '';
+    expect(text).toContain('DOI：10.1016/with-abstract');
+    expect(log.crossref).toBe(0);
+  });
+
   it('收到「不感兴趣」的回执后，这条不再被推送', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());

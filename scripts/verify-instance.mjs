@@ -142,5 +142,70 @@ if (withAlerts && view?.quota?.ok) {
   check('提醒阈值已改回', true, `${before <= 5 ? 80 : before}%`);
 }
 
+// ---------------------------------------------------------------- 兴趣推送
+
+const ipPage = (manifest.json?.providers ?? []).find((p) => p.id === 'world:interest-push');
+check(
+  '控制台页 world:interest-push 在 manifest 里',
+  Boolean(ipPage),
+  ipPage ? `${ipPage.label} panels=${(ipPage.panels ?? []).map((p) => p.id).join(',')}` : 'manifest 里没有',
+);
+check(
+  '声明了列表 / 详情 / 配置三个页签',
+  ['list', 'detail', 'settings'].every((id) => (ipPage?.panels ?? []).some((p) => p.id === id)),
+  (ipPage?.panels ?? []).map((p) => p.id).join(','),
+);
+check('配置不再交给框架的配置页', (ipPage?.configGroups ?? []).length === 0, `configGroups=${(ipPage?.configGroups ?? []).length}`);
+
+const ipClientUrl = ipPage?.client?.js;
+if (ipClientUrl) {
+  const js = await get(ipClientUrl);
+  check(
+    '面板产物可取且是这个包',
+    js.status === 200 && js.text.includes('ip-list') && js.text.includes('ip-jrow'),
+    `HTTP ${js.status} · ${ipClientUrl}`,
+  );
+} else {
+  check('面板产物可取且是这个包', false, 'manifest 里没写 client.js');
+}
+
+const ipActivation = await post('/api/worlds/activation', { id: 'interest-push', enabled: true });
+check('启用 World interest-push', ipActivation.status === 200, ipActivation.json?.result ?? `HTTP ${ipActivation.status}`);
+const ipWorlds = await get('/api/worlds');
+const ipWorld = (ipWorlds.json?.worlds ?? []).find((w) => w.id === 'interest-push');
+check(
+  'World 已激活并带三条读数',
+  ipWorld?.status === 'active' && (ipWorld.lamps ?? []).length === 3,
+  ipWorld ? `status=${ipWorld.status} lamps=${(ipWorld.lamps ?? []).length} badges=${(ipWorld.badges ?? []).length}` : '没有 interest-push',
+);
+
+const ipPanel = await post(`${panelBase}/world%3Ainterest-push/panels/list/state`, { args: [] });
+const ipView = ipPanel.json?.view ?? ipPanel.json;
+check('列表页数据面可用', ipPanel.status === 200 && Array.isArray(ipView?.items), `HTTP ${ipPanel.status} · 条目 ${ipView?.items?.length ?? 0}`);
+const ipFirst = (ipView?.items ?? [])[0];
+check(
+  '抓到条目且带期刊、分区与来源',
+  Boolean(ipFirst?.title && ipFirst?.journal && ipFirst?.source),
+  ipFirst ? `${ipFirst.source} · ${ipFirst.journal} · ${ipFirst.issued}` : '一条都没有',
+);
+check(
+  '调度读数在（上次检查 / 今日次数 / 下次窗口）',
+  typeof ipView?.schedule?.lastCheckAt === 'number' && typeof ipView?.schedule?.pushedToday === 'number',
+  ipView?.schedule ? `上次检查 ${new Date(ipView.schedule.lastCheckAt).toLocaleString('zh-CN')} · 今日 ${ipView.schedule.pushedToday}/${ipView.config?.dailyCap}` : '没有 schedule',
+);
+check(
+  '关键设置项齐全（关键词 / 期刊 / 术语表 / 推送时刻）',
+  (ipView?.config?.keywords ?? []).length >= 3
+    && (ipView?.config?.journals ?? []).length >= 20
+    && (ipView?.config?.glossary ?? []).length >= 30
+    && (ipView?.config?.pushTimes ?? []).length >= 1,
+  `关键词 ${(ipView?.config?.keywords ?? []).length} · 期刊 ${(ipView?.config?.journals ?? []).length} · 术语 ${(ipView?.config?.glossary ?? []).length} · 时刻 ${(ipView?.config?.pushTimes ?? []).join('/')}`,
+);
+check(
+  '期刊集合覆盖中科院一区与 JCR Q1',
+  (ipView?.config?.journals ?? []).filter((j) => /中科院一区|Q1/.test(j.tier ?? '')).length >= 20,
+  `带分区标签 ${(ipView?.config?.journals ?? []).filter((j) => /中科院一区|Q1/.test(j.tier ?? '')).length} 家`,
+);
+
 console.log(`\n${failed === 0 ? '全部通过' : `${failed} 项没过`}（共 ${total} 项）`);
 process.exit(failed === 0 ? 0 : 1);

@@ -1,4 +1,8 @@
 # 桌宠定时推送研究热点 · 技术方案
+> **实施状态**：本计划的研究结论已落地为 `extension-interest-push`（World id `interest-push`，显示名「兴趣推送」）。
+> 与计划的差异：推送形式为气泡多轮对话且**不含跳转**（详情由使用者自己打开）；arXiv 由分类 RSS 改为官方检索 API
+> （RSS 不接受检索式且周末为空）；Crossref 改用记录创建日期；摘要以 OpenAlex 与 Semantic Scholar 两级回填；
+> 期刊集合从 10 家扩到 28 家。验收记录见 `docs/VERIFICATION.md` 第 12 节。
 
 > 编写时间：2026-10-16（Asia/Shanghai）
 > 数据来源说明：文中所有 API 与 URL 均以 `curl` 实际访问一次；凡出现状态码、字段名、限额的，均取自实际请求的返回体或响应头；未经过实际验证的内容，均在正文中显式标注「**未验证**」。

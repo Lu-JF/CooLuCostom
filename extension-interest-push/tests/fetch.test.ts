@@ -44,11 +44,12 @@ describe('fetchJournal', () => {
 
     const url = new URL(captured);
     expect(`${url.origin}${url.pathname}`).toBe('https://api.crossref.org/journals/0888-3270/works');
-    expect(url.searchParams.get('filter')).toMatch(/^from-pub-date:\d{4}-\d{2}-\d{2}$/);
+    // 按记录创建日期筛与排序：期刊常把期号标到明年，按期号会顶出一堆未来日期。
+    expect(url.searchParams.get('filter')).toMatch(/^from-created-date:\d{4}-\d{2}-\d{2},until-created-date:\d{4}-\d{2}-\d{2}$/);
     expect(url.searchParams.get('rows')).toBe('50');
-    expect(url.searchParams.get('sort')).toBe('published');
+    expect(url.searchParams.get('sort')).toBe('created');
     expect(url.searchParams.get('order')).toBe('desc');
-    expect(url.searchParams.get('select')).toBe('DOI,title,author,container-title,abstract,issued,URL,link');
+    expect(url.searchParams.get('select')).toBe('DOI,title,author,container-title,abstract,issued,created,published-online,URL,link');
     expect(url.searchParams.get('query.bibliographic')).toBe('bearing fault diagnosis rotor');
     expect(url.searchParams.get('mailto')).toBe('me@example.com');
   });

@@ -161,7 +161,8 @@ export function normalizeCrossref(
 ): NewsItem {
   const work = unwrapWork(raw);
   const title = normalizeText(work.title);
-  const issued = datePartsToISO(work.issued);
+  // 展示「上线日期」：优先在线发表，其次记录创建；期号日期（issued）常被标到明年。
+  const issued = datePartsToISO(work['published-online']) || datePartsToISO(work.created) || datePartsToISO(work.issued);
   const doiRaw = typeof work.DOI === 'string' ? work.DOI.trim() : '';
   const doi = doiRaw || null;
   const rawUrl = typeof work.URL === 'string' ? work.URL.trim() : '';

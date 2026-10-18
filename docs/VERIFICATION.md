@@ -186,5 +186,43 @@ verify-instance → 12 项全部通过
   `~/.commandcode/auth.json`；本机未使用过该登录方式。面板采用端点密钥查询 whoami 的方式获取账号信息。
 - **面板产物的浏览器缓存**：产物 URL 中仅含包版本号，不含内容哈希，因此修改后需提升版本号并重启进程。
 - **`--background` 参数的行为**：源码中仅存在写入该参数的位置，未发现对应的判断逻辑，其实际效果未验证。
-- **日志中的一次重试记录**：曾出现 `Provider attempt failed; retrying { err: 'Delta before content part' }`，
-  未复现，未进一步分析。
+- **日志中的重试记录已定位**：`Provider attempt failed; retrying { err: 'Delta before content part' }` 来自
+  `protocol/open-responses/stream.ts` 的解析器——它要求同一个内容段先有 `response.content_part.added` 才有增量。
+  本机 Command Code 端点在**开启思考**时先发一串 `response.reasoning.delta`（不带 `.added`），解析器因此拒绝；
+  以 `reasoning: { effort: 'none' }` 或 `'minimal'` 请求时流是合规的（`content_part.added` → `output_text.delta`
+  → `done`）。这是端点协议与框架解析器的兼容问题，与扩展无关，但会让桌宠在开启思考时无法回话。
+- **兴趣推送的气泡实测**：事件投递、回执认领与调度均已验证（见第 12 节），但**桌宠按脚本说话**这一步未能实测——
+  卡在上一条的端点流式问题上。端点的思考等级调成 `none`/`minimal` 或换一个合规模型后即可复测。
+
+## 12. 兴趣推送扩展的验收
+
+`extension-interest-push`（`cortico-world-interest-push`，World id `interest-push`）。
+
+单元测试与类型检查：
+
+```bash
+cd extension-interest-push
+npx vitest run           # 9 个文件 91 项通过
+npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.web.json --noEmit   # 0 错
+npm run build            # dist/console.js 16.5 KB · dist/console.css 0.8 KB
+```
+
+覆盖面：Crossref / arXiv / 每日论文榜三种源的规范化与抓取参数、arXiv 检索式与 Atom 解析、相关性过滤、
+OpenAlex 与 Semantic Scholar 的摘要回填、去重落盘、调度判定（窗口内首推、同窗口只推一次、窗口外、
+静默、星期、每日上限、暂停）、术语表解析与哈希、骰子提示词与译文提取、World 的抓取/推送/回执/配置夹紧/翻译
+链路、控制台声明。
+
+真机（官方安装版 v0.2.4，`D:\Sorftware\Coopanion`）：
+
+| 检查 | 结果 |
+|---|---|
+| 实例自检 `node scripts/verify-instance.mjs` | 23 项通过（含兴趣推送 11 项：manifest 页与三个页签、产物可取、World 激活与三条读数、列表数据面、条目字段、调度读数、设置项齐全、分区标签） |
+| 渲染检查 `node extension-interest-push/scripts/check-panel-render.mjs 17788` | 21 项通过（列表 60 条、详情六个字段与两个按钮、翻译按钮、配置四组卡片 153 个输入框、28 行期刊逐行可编辑、保存按钮、两个调试按钮、路径选择器、无资源失败） |
+| 真实抓取 | 一轮 190 条，入库 60 条：Crossref 43（28 家期刊）、arXiv 14、每日论文榜 3（相关性过滤前 39）；日期最新 2026-10-18，无未来日期 |
+| 摘要回填 | OpenAlex 与 Semantic Scholar 两轮合计补 31 条；两处都没有的条目在列表标「无摘要」 |
+| 翻译 | 12.2 秒，术语与数字保留（`大语言模型（LLMs）`、`协同边缘计算（CEC）`、`45%`）；第二次命中缓存 0.01 秒 |
+| 下载原文 | 开放获取条目落盘 704572 字节到 `<数据目录>/news/papers/<编号>-<标题>.pdf` |
+| 事件投递 | `news.item` 进事件库，正文含标题、期刊与分区、作者与团队、DOI、爬取源、摘要、编号 |
+| 框架自带契约检查 | 未运行：上游源码树的依赖在目录改名后成断链，需 `CI=true pnpm install` 修复；等价的加载与声明校验由实例自检与真机加载提供 |
+
+未实测：桌宠按提示词脚本进行气泡多轮对话（原因见第 11 节末两条）。

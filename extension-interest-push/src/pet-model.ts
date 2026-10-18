@@ -3,8 +3,8 @@
  * `<botDir>/providers/<端点名>/config.json`（`{ baseUrl, secret }`）与同目录 `.env`（`secret` 变量的值）。
  * 只读；找不到返回 null。翻译用它——用桌宠自己配的模型，与人设无关。
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 export interface PetModel {
   /** 端点名，例如 CommandCode。 */
@@ -37,12 +37,31 @@ function readEnvFile(path: string): Record<string, string> {
   }
 }
 
+/**
+ * providers 目录的候选位置：`<botDir>/../providers`（安装版的实测布局，与用量额度扩展一致）
+ * 与 `<botDir>/providers`（保险）。
+ */
+export function providersRoots(botDir: string): string[] {
+  if (!botDir) return [];
+  return [join(dirname(botDir), 'providers'), join(botDir, 'providers')];
+}
+
 /** `preferred` 非空时优先它，否则用 `config.json` 的 `activeProvider`。 */
 export function resolvePetModel(botDir: string, preferred = ''): PetModel | null {
   const config = readJson(join(botDir, 'config.json'));
   const name = preferred || String(config?.activeProvider ?? '');
-  const dir = join(botDir, 'providers', name);
-  const endpoint = readJson(join(dir, 'config.json'));
+  let dir = '';
+  let endpoint: Record<string, unknown> | null = null;
+  for (const root of providersRoots(botDir)) {
+    const candidate = join(root, name);
+    if (!existsSync(candidate)) continue;
+    const parsed = readJson(join(candidate, 'config.json'));
+    if (parsed) {
+      dir = candidate;
+      endpoint = parsed;
+      break;
+    }
+  }
   if (!endpoint) return null;
   const secretName = String(endpoint.secret ?? '');
   const dotenv = readEnvFile(join(dir, '.env'));

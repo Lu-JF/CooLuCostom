@@ -96,6 +96,7 @@ function mountList(ctx: ConsolePanelContext): void {
       const head = ui.h('div', 'ip-rowhead');
       head.append(ui.h('span', 'ip-title', row.title));
       head.append(ui.pill(row.unread ? t.list.unread : t.list.read, row.unread ? 'on' : 'plain'));
+      if (!row.hasAbstract) head.append(ui.pill(t.list.noAbstract, 'plain'));
       line.append(head, ui.h('div', 'ip-meta', metaLine(t, row)));
       line.addEventListener('click', () => {
         void (async () => {

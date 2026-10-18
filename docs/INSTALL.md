@@ -21,12 +21,17 @@ npm run build      # 生成 dist/console.js 与 dist/console.css
 node scripts/sync-extension-to-app.mjs                # 默认目标目录 D:\Sorftware\Coopanion
 ```
 
-`sync-extension-to-app.mjs` 依次完成三步：构建面板产物；将 `extension/` 目录（不含 `node_modules`）复制到
-`<应用>\data\extensions\node_modules\cortico-world-quota`；在 `<应用>\data\extensions\package.json` 的
-`dependencies` 中登记该包名。框架按 `dependencies` 中的包名到 `node_modules` 下查找扩展，两处须同时具备，否则
-扩展不会被加载。
+`sync-extension-to-app.mjs` 对 `PACKAGES` 里的每个包依次完成三步：构建面板产物；将该包目录（不含
+`node_modules`）复制到 `<应用>\data\extensions\node_modules\<包名>`；在
+`<应用>\data\extensions\package.json` 的 `dependencies` 中登记该包名。框架按 `dependencies` 中的包名到
+`node_modules` 下查找扩展，两处须同时具备，否则扩展不会被加载。当前登记两个包：
+`cortico-world-quota`（用量额度）与 `cortico-world-interest-push`（兴趣推送）。
 
-安装完成后，通过托盘菜单重启桌宠，将控制台左栏切换至高级模式，WORLD 分组下即出现「用量额度」。
+安装完成后，通过托盘菜单重启桌宠，将控制台左栏切换至高级模式，WORLD 分组下即出现「用量额度」与「兴趣推送」。
+
+启用「兴趣推送」：World 的默认 `enabled` 为 false，需在 `<应用>\data\home\companion\config.json` 的
+`worlds` 里加上 `"interest-push": { "enabled": true }`，或在控制台的 World 总览里启用；其余字段由扩展的
+默认值补齐（28 家期刊、46 条术语、6 条关键词）。
 
 官方安装版的数据目录位于程序目录旁的 `data\`，其中 `data\home` 存放配置、记忆、角色与端点凭证，
 `data\extensions` 存放扩展。迁移已有实例时，将原实例的这两个目录复制过来即可。

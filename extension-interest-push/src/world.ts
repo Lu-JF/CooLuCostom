@@ -15,7 +15,9 @@ import type { Language } from 'cortico/core/language.ts';
 import type { World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import type { InterestPushConfigSection, JournalEntry } from './config.ts';
-import { fetchArxiv, fetchHfDaily, fetchJournal } from './fetch.ts';
+import { fetchHfDaily, fetchJournal, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts } from './fetch.ts';
+import { fetchArxivSearch } from './arxiv.ts';
+import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
@@ -279,7 +281,7 @@ export class InterestPushWorld implements World {
           list.map((item) => ({ ...item, tier: item.tier ?? tierOf.get(j.issn)?.tier ?? null, journal: item.journal || j.label })),
         ),
       ),
-      () => fetchArxiv({ categories: cfg.arxivCats, keywords: cfg.keywords }, deps),
+      () => fetchArxivSearch({ keywords: cfg.keywords, categories: cfg.arxivCats, max: 40 }, deps),
       () => fetchHfDaily(deps),
     ];
     const out: NewsItem[] = [];
@@ -288,7 +290,44 @@ export class InterestPushWorld implements World {
       const results = await Promise.all(batch.map((job) => job().catch(() => [] as NewsItem[])));
       for (const list of results) out.push(...list);
     }
-    return out;
+    await this.backfillAbstracts(out, deps);
+    // Hugging Face 日榜是整条 AI 领域的榜单：只留与研究领域相关的条目。
+    return out.filter((item) => item.source !== 'hf' || relevant(`${item.title} ${item.abstract}`, cfg.keywords));
+  }
+
+  /**
+   * 缺摘要的条目按 DOI 补：先 OpenAlex，剩下的再问 Semantic Scholar
+   * （Elsevier 在 Crossref 里不存摘要，OpenAlex 对新文章也常没有）。
+   * 补上了就在爬取源里注明来源，详情页那个「爬取源」字段会说清摘要从哪来。
+   */
+  private async backfillAbstracts(items: NewsItem[], deps: { fetchImpl?: typeof fetch; mailto: string }): Promise<void> {
+    const pending = (): string[] => [
+      ...new Set(items.filter((i) => i.abstract.trim() === '' && i.doi).map((i) => i.doi as string)),
+    ];
+    let filled = 0;
+    try {
+      const first = pending();
+      if (first.length > 0) filled += this.applyAbstracts(items, await fetchOpenAlexAbstracts(first, deps), 'openalex');
+      const rest = pending();
+      if (rest.length > 0) filled += this.applyAbstracts(items, await fetchSemanticScholarAbstracts(rest, deps), 'semanticscholar');
+    } catch (err) {
+      this.log(`补摘要失败：${String((err as Error)?.message ?? err)}`);
+    }
+    if (filled > 0) this.log(`补了 ${filled} 条摘要`);
+  }
+
+  /** 把 doi→摘要 填进缺摘要的条目；返回补上的条数。 */
+  private applyAbstracts(items: NewsItem[], abstracts: Record<string, string>, tag: string): number {
+    let filled = 0;
+    for (const item of items) {
+      if (item.abstract.trim() !== '' || !item.doi) continue;
+      const text = abstracts[item.doi.toLowerCase()];
+      if (!text) continue;
+      item.abstract = text;
+      item.sourceDetail = `${item.sourceDetail} +${tag}摘要`;
+      filled += 1;
+    }
+    return filled;
   }
 
   private merge(found: NewsItem[]): void {
@@ -308,9 +347,11 @@ export class InterestPushWorld implements World {
     this.log(`本轮抓到 ${found.length} 条，其中新的 ${fresh.length} 条`);
   }
 
+  /** 挑一条推送：有摘要的优先（气泡要讲得出内容），都没摘要就退而推最新的一条。 */
   private pickPushItem(): NewsItem | null {
     const skip = new Set([...this.state.pushedIds, ...this.state.dismissed, ...this.state.read]);
-    return this.items.find((i) => !skip.has(i.id)) ?? null;
+    const pool = this.items.filter((i) => !skip.has(i.id));
+    return pool.find((i) => i.abstract.trim() !== '') ?? pool[0] ?? null;
   }
 
   private async pushItem(item: NewsItem, windowKey: string | null): Promise<void> {
@@ -475,6 +516,7 @@ export class InterestPushWorld implements World {
         issued: item.issued,
         source: item.source,
         unread: !this.state.read.includes(item.id),
+        hasAbstract: item.abstract.trim() !== '',
       })),
       active,
       translation: active ? (this.translations.get(active.id) ?? null) : null,
@@ -525,14 +567,18 @@ export class InterestPushWorld implements World {
     if (existsSync(path)) return { ok: true, reason: t.detail.downloaded(path), view: this.view(language) };
     const doFetch = this.opts.fetchImpl ?? fetch;
     try {
-      const res = await doFetch(item.pdfUrl);
+      // 带一个说明用途的 UA：出版社与 arXiv 对无 UA 的自动请求更容易拦。
+      const res = await doFetch(item.pdfUrl, { headers: { 'user-agent': 'interest-push/0.1 (+local research reader)' } });
       if (!res.ok) return { ok: false, reason: t.detail.failed(`http ${res.status}`), view: this.view(language) };
       const buf = Buffer.from(await res.arrayBuffer());
       writeFileSync(path, buf);
       this.log(`已下载原文到 ${path}`);
       return { ok: true, reason: t.detail.downloaded(path), view: this.view(language) };
     } catch (err) {
-      return { ok: false, reason: t.detail.failed(String((err as Error)?.message ?? err)), view: this.view(language) };
+      const e = err as Error & { cause?: unknown };
+      const cause = e?.cause === undefined ? '' : ` · ${String((e.cause as Error)?.message ?? e.cause)}`;
+      this.log(`下载失败：${String(e?.message ?? err)}${cause}`);
+      return { ok: false, reason: t.detail.failed(`${String(e?.message ?? err)}${cause}`), view: this.view(language) };
     }
   }
 
