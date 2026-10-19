@@ -48,7 +48,7 @@ function switchPanel(ctx: ConsolePanelContext, panelId: string): void {
   }
 }
 
-function metaLine(t: InterestText, row: NewsRow): string {
+function metaLine(row: NewsRow): string {
   return [row.journal, row.tier ?? '', row.issued, row.source].filter((s) => s !== '').join(' · ');
 }
 
@@ -572,7 +572,7 @@ function mountList(ctx: ConsolePanelContext): void {
         });
         revRow.append(rb);
       }
-      line.append(head, ui.h('div', 'ip-meta', metaLine(t, row)), revRow);
+      line.append(head, ui.h('div', 'ip-meta', metaLine(row)), revRow);
       line.addEventListener('click', () => {
         void (async () => {
           try {
@@ -628,7 +628,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     variant: 'primary',
     onClick: () => {
       void (async () => {
-        // 「重新爬取一次」= 重新抓一遍所有源并回填摘要，要几十秒。改成行内状态，页面照常能用。
+        // 抓取与摘要回填耗时较长，进度写在按钮旁，不用整页遮罩。
         checkBtn.disabled = true;
         checkStatus.set(t.settings.checking, 'busy');
         try {

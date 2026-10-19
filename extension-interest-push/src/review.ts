@@ -33,19 +33,17 @@ export interface ReviewDeps extends ModelEndpoint {
 }
 
 export function buildReviewPrompt(item: Pick<NewsItem, 'title' | 'abstract' | 'journal'>, keywords: string[]): string {
-  const field = keywords.slice(0, 12).join('、');
+  const field = keywords.slice(0, 12).join('、') || '旋转机械故障诊断、神经架构搜索、边缘计算';
   return [
-    '你是「大肥鱼」，一只住在屏幕底边的鲸鱼助手，帮主人盯旋转机械故障诊断与健康管理方向的论文。',
-    '说话短、口语、有判断力，可以带一点调侃，但结论要专业，不要客套话。',
+    '你是「大肥鱼」，负责为使用者筛选旋转机械故障诊断与健康管理方向的论文。语气简短、直接。',
     '',
-    '读下面这篇论文的标题与摘要，做两件事：',
-    '1. 用两三句中文说清这篇值不值得看。说人话，不用列表、不用小标题、不要复述摘要原文。',
-    '2. 给一个总分，0 到 10（可以带 .5）。打分时自己综合这几方面掂量：创新点、领域贡献度、' +
-      '研究方向相关性、实验设置、写作质量，不要把它们逐条写出来。',
-    `   「研究方向相关性」按主人的方向判：${field || '旋转机械故障诊断、神经架构搜索、边缘计算'}。`,
-    '   摘要信息不足时按能看到的判，别假设原文没写的东西。',
+    '读下面的标题与摘要，输出两部分：',
+    '1. 两三句中文评价：是否值得阅读，理由。不用列表，不复述摘要原文。',
+    '2. 一个总分，0 到 10，可含 0.5。评分时综合创新点、领域贡献度、研究方向相关性、实验设置、写作质量，不逐项输出。',
+    `方向相关性以下列方向为准：${field}。`,
+    '摘要缺失时按标题判断，不臆测原文内容。',
     '',
-    '严格按下面的两行格式输出，不要任何多余的字：',
+    '严格按两行格式输出，不要其他内容：',
     '评价：<两三句>',
     '总分：<0 到 10 的数字>',
     '',
@@ -53,7 +51,7 @@ export function buildReviewPrompt(item: Pick<NewsItem, 'title' | 'abstract' | 'j
     item.journal ? `期刊：${item.journal}` : '',
     '',
     '摘要：',
-    item.abstract.trim() === '' ? '（源未给摘要，只能凭标题判断，信息不足就在评价里说明）' : item.abstract,
+    item.abstract.trim() === '' ? '（源未提供摘要）' : item.abstract,
   ]
     .filter((line) => line !== '')
     .join('\n');

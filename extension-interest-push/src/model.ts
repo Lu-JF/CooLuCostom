@@ -78,7 +78,7 @@ export async function askModel(
     }
   };
   const first = await once();
-  // 端点偶尔 `fetch failed`（连接被对端掐断，实测过一次）：这种网络错重试一次，别让气泡少了速评。
+  // 网络类错误重试一次；HTTP 错误不重试。
   if (first.ok || !/fetch failed|socket|ECONNRESET|ETIMEDOUT/i.test(first.reason ?? '')) return first;
   await new Promise((r) => setTimeout(r, 800));
   return await once();

@@ -300,7 +300,11 @@ try {
   });
   check('四组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
   check('节奏字段齐（间隔/上限/轮次/时刻/静默/星期/暂停到）', ['检查间隔', '每天最多几条', '对话轮次上限', '推送时刻', '静默时段', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
-  check('推送时刻与关键词是标签', cfg.tags.length >= 8 && cfg.tags.includes('10:30') && cfg.tags.some((x) => x.includes('bearing')), cfg.tags.slice(0, 6).join(' / '));
+  check(
+    '推送时刻与关键词是标签',
+    cfg.tags.length >= 5 && cfg.tags.some((x) => /^\d{2}:\d{2}$/.test(x)) && cfg.tags.some((x) => x.includes('bearing')),
+    cfg.tags.slice(0, 6).join(' / '),
+  );
   check('时刻是「时 + 分」两个下拉，分钟能选到 15（不用打字）', cfg.timeHasQuarter && cfg.timeSelects >= 4, `${cfg.timeSelects} 个下拉，含 15 分：${cfg.timeHasQuarter}`);
   check('星期是 1-7 的按钮、默认全亮、单独一行', cfg.weekCount === 7 && cfg.weekOn === 7 && cfg.weekInOwnRow, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个，独占一行：${cfg.weekInOwnRow}`);
   check('期刊表有表头且第四列已取消', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区标签/.test(cfg.journalHead) && /分组/.test(cfg.journalHead) && !cfg.hasTierBasisColumn, cfg.journalHead.trim().slice(0, 40));

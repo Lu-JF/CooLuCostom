@@ -154,7 +154,7 @@ export async function fetchOpenAlexAbstracts(dois: string[], deps: FetchDeps): P
 
 /**
  * 按标题在 OpenAlex 找摘要。新上线的 Elsevier 文章常常「有记录但 DOI 索引还没对上」，
- * 按 DOI 查是空的，按标题 search 却能拿到——实测三篇里补回两篇。
+ * 按 DOI 查不到时改按标题检索。
  */
 export async function fetchOpenAlexAbstractByTitle(
   title: string,

@@ -255,7 +255,7 @@ export class InterestPushWorld implements World {
     this.pushTimer.unref?.();
   }
 
-  private async run(reason: 'start' | 'timer' | 'window' | 'manual' | 'force'): Promise<void> {
+  private async run(reason: 'start' | 'timer' | 'window' | 'manual'): Promise<void> {
     if (this.inflight) return this.inflight;
     this.inflight = this.doRun(reason).finally(() => {
       this.inflight = null;
@@ -263,7 +263,7 @@ export class InterestPushWorld implements World {
     return this.inflight;
   }
 
-  private async doRun(reason: 'start' | 'timer' | 'window' | 'manual' | 'force'): Promise<void> {
+  private async doRun(reason: 'start' | 'timer' | 'window' | 'manual'): Promise<void> {
     this.rollDay();
     try {
       const found = await this.collect();
@@ -276,15 +276,11 @@ export class InterestPushWorld implements World {
     this.state.lastCheckAt = this.now();
     this.scanAnswers();
 
-    if (reason === 'window' || reason === 'force') {
-      // `force` 是面板上「立刻推一条」：跳过时间与次数判断，只要求有一条没推过的条目。
-      const decision: { push: boolean; windowKey: string | null; reason: string } =
-        reason === 'force'
-          ? { push: true, windowKey: this.state.lastWindowKey, reason: 'forced' }
-          : decide(this.scheduleConfig(), new Date(this.now()), {
-              pushedToday: this.state.pushedToday,
-              lastWindowKey: this.state.lastWindowKey,
-            });
+    if (reason === 'window') {
+      const decision = decide(this.scheduleConfig(), new Date(this.now()), {
+        pushedToday: this.state.pushedToday,
+        lastWindowKey: this.state.lastWindowKey,
+      });
       if (decision.push) {
         const item = this.pickPushItem();
         if (item) await this.pushItem(item, decision.windowKey);
@@ -528,7 +524,7 @@ export class InterestPushWorld implements World {
 
   /**
    * 事件正文。开头先写一句「该做什么」：这段正文就在模型眼前，比只放在系统前缀里的提示词更靠得住
-   * （人设允许沉默，实测它会直接 end_turn 不出声）。
+   * （人设允许沉默时，只放在系统前缀里的提示不足以让它开口）。
    */
   private itemEventText(item: NewsItem, review: ReviewState | null): string {
     const authors = item.authors.slice(0, 3).join('、') + (item.authors.length > 3 ? ' 等' : '');
@@ -690,7 +686,7 @@ export class InterestPushWorld implements World {
     }
   }
 
-  view(language: Language): InterestPushView {
+  view(_language?: Language): InterestPushView {
     const cfg = this.opts.cfg;
     const active = this.activeItem();
     return {

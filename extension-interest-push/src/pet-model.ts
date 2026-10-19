@@ -38,7 +38,7 @@ function readEnvFile(path: string): Record<string, string> {
 }
 
 /**
- * providers 目录的候选位置：`<botDir>/../providers`（安装版的实测布局，与用量额度扩展一致）
+ * providers 目录的候选位置：`<botDir>/../providers`（与用量额度扩展一致）
  * 与 `<botDir>/providers`（保险）。
  */
 export function providersRoots(botDir: string): string[] {

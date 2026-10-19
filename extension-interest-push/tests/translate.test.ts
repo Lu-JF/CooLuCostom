@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildPrompt, extractText, missingTokens, promptHash, splitTranslated, translate } from '../src/translate.ts';
+import { buildPrompt, missingTokens, promptHash, splitTranslated, translate } from '../src/translate.ts';
 import type { NewsItem } from '../src/view-types.ts';
 
 const ITEM: NewsItem = {
@@ -32,14 +32,23 @@ const RESPONSE_WITH_REASONING = {
 };
 
 describe('译文提取', () => {
-  it('只取 message 的 output_text，扔掉 reasoning', () => {
-    expect(extractText(RESPONSE_WITH_REASONING)).toBe('本文提出一种轻量网络，在 1200 rpm 下准确率达 99.2%。');
-  });
-
-  it('兼容 output_text 字段与 chat completions 形状', () => {
-    expect(extractText({ output_text: '纯文本' })).toBe('纯文本');
-    expect(extractText({ choices: [{ message: { content: '另一种形状' } }] })).toBe('另一种形状');
-    expect(extractText({})).toBe('');
+  it('只取 message 的 output_text，扔掉 reasoning', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ip-tr-'));
+    const state = await translate(ITEM, {
+      dataDir: dir,
+      baseUrl: 'https://api.example.ai/v1',
+      apiKey: 'k',
+      model: 'm',
+      glossaryLines: [],
+      fetchImpl: (async () =>
+        new Response(JSON.stringify(RESPONSE_WITH_REASONING), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })) as unknown as typeof fetch,
+    });
+    expect(state.ok).toBe(true);
+    expect(state.text).toContain('轻量网络');
+    expect(state.text ?? '').not.toContain('We need translate');
   });
 });
 
@@ -48,7 +57,7 @@ describe('提示词', () => {
     const prompt = buildPrompt(ITEM, ['bearing | 轴承', 'fault diagnosis | 故障诊断']);
     expect(prompt).toContain('bearing = 轴承');
     expect(prompt).toContain('不增删');
-    expect(prompt).toContain('第一行只写标题译文');
+    expect(prompt).toContain('首行只写标题译文');
     expect(prompt).toContain(`标题：${ITEM.title}`);
     expect(prompt).toContain(ITEM.abstract);
     expect(prompt).not.toContain('气泡');

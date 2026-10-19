@@ -3,7 +3,7 @@
  *
  * 判定顺序：命中任一关键词短语 → 收；命中两个以上**领域词** → 收。
  * 不再用关键词里的泛词做二次判定（edge、computing、learning 这类会把「目标导航」
- * 一类的通用 AI 论文也放进来，实测放过一篇）。
+ * 一类的通用 AI 论文也会混进来）。
  */
 const STOP = new Set([
   'with', 'from', 'using', 'based', 'under', 'into', 'that', 'this', 'these', 'those',

@@ -45,7 +45,7 @@ describe('提示词', () => {
     expect(prompt).toContain('研究方向相关性');
     expect(prompt).toContain('实验设置');
     expect(prompt).toContain('写作质量');
-    expect(prompt).toContain('不要把它们逐条写出来');
+    expect(prompt).toContain('不逐项输出');
     expect(prompt).toContain('总分：<0 到 10 的数字>');
     expect(prompt).toContain(ITEM.abstract);
   });
@@ -57,7 +57,7 @@ describe('提示词', () => {
 
   it('没有摘要时明说信息不足，别让模型瞎补', () => {
     const prompt = buildReviewPrompt({ ...ITEM, abstract: '' }, []);
-    expect(prompt).toContain('源未给摘要');
+    expect(prompt).toContain('源未提供摘要');
   });
 });
 
