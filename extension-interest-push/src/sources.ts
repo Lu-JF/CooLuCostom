@@ -180,7 +180,7 @@ export function normalizeCrossref(
     url: rawUrl || (doi ? `https://doi.org/${doi}` : ''),
     pdfUrl: pickPdfUrl(work.link),
     source: 'crossref',
-    sourceDetail: `crossref:${ctx.issn}?from-pub-date:${ctx.query}`,
+    sourceDetail: `crossref:${ctx.issn}?${ctx.query}`,
     foundAt: Date.now(),
   };
 }

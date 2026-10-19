@@ -11,7 +11,8 @@ function sha1_8(input: string): string {
   return createHash('sha1').update(input, 'utf8').digest('hex').slice(0, 8);
 }
 
-const CTX = { issn: '0888-3270', tier: '中科院一区 · JCR Q1', query: '2026-09-18' };
+// query 就是 fetch.ts 传给 normalized 的窗口标注，抓取端写作 `created:<日期>`
+const CTX = { issn: '0888-3270', tier: '中科院一区 · JCR Q1', query: 'created:2026-09-18' };
 
 const CROSSREF_ITEM = {
   DOI: '10.1016/j.ymssp.2026.115080',
@@ -81,7 +82,7 @@ describe('normalizeCrossref', () => {
   });
 
   it('sourceDetail 带上 issn 与 query', () => {
-    expect(normalizeCrossref(CROSSREF_ITEM, CTX).sourceDetail).toBe('crossref:0888-3270?from-pub-date:2026-09-18');
+    expect(normalizeCrossref(CROSSREF_ITEM, CTX).sourceDetail).toBe('crossref:0888-3270?created:2026-09-18');
   });
 
   it('pdfUrl：仅公开域名或 .pdf 结尾的 PDF 链接', () => {

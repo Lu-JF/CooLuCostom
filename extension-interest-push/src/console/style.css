@@ -1,9 +1,36 @@
-/* 兴趣推送面板：只补框架样式没覆盖的几块（条目行、摘要块、期刊行）。 */
+/* 兴趣推送面板：标签、星期按钮、紧凑字段与两个网格编辑器。 */
 .ip-note {
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
+/* ---- 详情 */
+.ip-title-lg {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.ip-abstract,
+.ip-translation {
+  max-height: 300px;
+  overflow: auto;
+}
+
+.ip-tr-title {
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ip-tr {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ---- 列表 */
 .ip-list {
   display: flex;
   flex-direction: column;
@@ -42,37 +69,129 @@
 }
 
 .ip-detail {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.ip-abstract,
-.ip-translation {
-  max-height: 320px;
-  overflow: auto;
+/* ---- 紧凑字段：标签与控件同一行 */
+.ip-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  align-items: center;
+}
+
+.ip-fieldrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
+  white-space: nowrap;
 }
 
-.ip-tr {
-  margin: 0;
-  white-space: pre-wrap;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.5;
+.ip-fieldlabel {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
-.ip-jrows {
+.ip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ip-inline input {
+  min-width: 240px;
+}
+
+/* ---- 标签（推送时刻、关键词、arXiv 分类） */
+.ip-tags {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
+.ip-taglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+
+.ip-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.ip-tag .ip-tagx {
+  padding: 0 4px;
+  min-width: 0;
+  height: auto;
+  line-height: 1.2;
+}
+
+.ip-tagempty {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.ip-taghint {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+/* ---- 星期按钮 */
+.ip-week {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.ip-week .btn.on {
+  border-color: var(--accent-strong, currentColor);
+  font-weight: 700;
+  outline: 1px solid currentColor;
+}
+
+/* ---- 两个网格编辑器 */
+.ip-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ip-gridbody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
 .ip-jrow {
   display: grid;
-  grid-template-columns: 2.4fr 1fr 1.6fr 1.4fr 0.6fr auto;
+  grid-template-columns: 2.6fr 1fr 1.7fr 0.6fr auto;
   gap: 6px;
   align-items: center;
 }
 
+.ip-jrow.ip-grow {
+  grid-template-columns: 1.4fr 1.4fr auto;
+}
+
 .ip-jrow input {
   min-width: 0;
+}
+
+.ip-gridhead {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+.ip-gridcell {
+  padding: 0 2px;
 }

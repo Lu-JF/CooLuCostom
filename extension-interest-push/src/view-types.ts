@@ -37,6 +37,8 @@ export interface NewsRow {
 /** 译文状态。 */
 export interface TranslationState {
   ok: boolean;
+  /** 标题译文；模型没按格式给标题时为空串。 */
+  title: string | null;
   text: string | null;
   cached: boolean;
   /** 数字/单位/缩写可能缺失处的数量，仅作提示。 */

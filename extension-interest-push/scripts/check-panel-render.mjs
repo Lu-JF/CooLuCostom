@@ -103,6 +103,27 @@ try {
   await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#kernel-root', { timeout: 30_000 });
 
+  // ---- 详情页签（现在排第一）
+  const detailOk = await openPanel('detail', '.ip-title-lg');
+  check('详情页签排第一且挂上了', detailOk);
+  await page.waitForFunction(() => (document.querySelector('.ip-detail')?.querySelectorAll('tr').length ?? 0) >= 5, null, { timeout: 40_000 }).catch(() => {});
+  const detail = await page.evaluate(() => ({
+    text: document.body.textContent ?? '',
+    title: document.querySelector('.ip-title-lg')?.textContent ?? '',
+    kv: [...document.querySelectorAll('.ip-detail tr')].map((tr) => tr.textContent ?? ''),
+    hasAbstract: (document.querySelector('.ip-abstract')?.textContent ?? '').length > 40,
+    buttons: [...document.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
+    selects: document.querySelectorAll('select').length,
+    order: [...document.querySelectorAll('.sheet h3')].map((h) => (h.childNodes[0]?.textContent ?? '').trim()),
+  }));
+  check('详情给出期刊/上线/作者/团队/DOI/爬取源', ['期刊', '上线', '作者', '团队', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 4)).join(','));
+  check('从上到下是标题、原文摘要、中文译文、详情', JSON.stringify(detail.order.slice(0, 4)) === JSON.stringify(['论文标题', '原文摘要', '中文译文', '详情']), detail.order.slice(0, 4).join(' → '));
+  check('标题与摘要都画出来了', detail.title.length > 10, detail.title.slice(0, 54));
+  check('翻译按钮在原文摘要旁边', detail.buttons.some((b) => b === '翻译摘要' || b === '重新翻译'), detail.buttons.filter((b) => b.includes('翻译')).join('/'));
+  check('顶部有刷新与换一篇', detail.buttons.includes('刷新') && detail.buttons.includes('换一篇'), '');
+  check('已取消下拉列表切换', detail.selects === 0, `${detail.selects} 个下拉`);
+  check('详情卡里有打开原文与下载', detail.buttons.includes('打开原文') && detail.buttons.includes('下载原文'), '');
+
   // ---- 列表页签
   const listOk = await openPanel('list', '.ip-list');
   check('列表页签挂上了', listOk);
@@ -114,63 +135,55 @@ try {
       rows: rows.length,
       first: rows[0]?.textContent ?? '',
       titles: rows.slice(0, 3).map((r) => r.querySelector('.ip-title')?.textContent ?? ''),
-      pills: (box?.textContent ?? ''),
+      text: box?.textContent ?? '',
       note: document.querySelector('.ip-note')?.textContent ?? '',
       refresh: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('立即检查一次')),
     };
   });
   check('列表里有条目', list.rows > 0, `${list.rows} 条`);
-  check('条目带标题与期刊行', list.titles[0]?.length > 10 && list.first.includes('·'), list.titles[0]?.slice(0, 54) ?? '');
-  check('有读/未读标记', /未读|已读/.test(list.pills), '');
+  check('条目带标题与期刊行', list.titles[0]?.length > 10 && list.first.includes('·'), list.titles[0]?.slice(0, 50) ?? '');
+  check('不再标「未读」，改为标「已读」', !list.text.includes('未读'), list.text.includes('已读') ? '有已读标记' : '当前都是未读（无标记）');
   check('顶部有检查状态与按钮', list.note.includes('上次检查') && list.refresh, list.note.slice(0, 60));
 
-  // ---- 详情页签
-  const detailOk = await openPanel('detail', '.ip-detail');
-  check('详情页签挂上了', detailOk);
-  await page.waitForFunction(() => (document.querySelector('.ip-detail')?.querySelectorAll('tr').length ?? 0) >= 5, null, { timeout: 40_000 }).catch(() => {});
-  const detail = await page.evaluate(() => ({
-    text: document.body.textContent ?? '',
-    kv: [...document.querySelectorAll('.ip-detail tr')].map((tr) => tr.textContent ?? ''),
-    hasAbstract: (document.querySelector('.ip-abstract')?.textContent ?? '').length > 40,
-    buttons: [...document.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
-    selector: document.querySelectorAll('select').length,
-  }));
-  check('详情给出期刊/上线/作者/团队/DOI/爬取源', ['期刊', '上线', '作者', '团队', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 6)).join(','));
-  check('细节带条目标题（可切换）', detail.selector >= 1, `${detail.selector} 个下拉`);
-  check('有原文摘要卡', detail.text.includes('原文摘要'), detail.hasAbstract ? '摘要非空' : '本条无摘要（源未给）');
-  check('有打开原文与下载按钮', detail.buttons.includes('打开原文') && detail.buttons.includes('下载原文'), detail.buttons.slice(0, 6).join(' / '));
-  check('有翻译按钮（不自动翻译）', detail.buttons.some((b) => b === '翻译摘要' || b === '重新翻译'), detail.buttons.filter((b) => b.includes('翻译')).join(' / '));
-
   // ---- 配置页签
-  const settingsOk = await openPanel('settings', '.ip-jrows');
+  const settingsOk = await openPanel('settings', '.ip-gridhead');
   check('配置页签挂上了', settingsOk);
   await page.waitForFunction(() => (document.querySelectorAll('.ip-jrow').length ?? 0) > 0, null, { timeout: 30_000 }).catch(() => {});
   const cfg = await page.evaluate(() => {
     const text = document.body.textContent ?? '';
     const inputs = [...document.querySelectorAll('input')];
-    const areas = [...document.querySelectorAll('textarea')];
-    const rows = [...document.querySelectorAll('.ip-jrow')];
+    const rows = [...document.querySelectorAll('.ip-gridbody .ip-jrow')];
+    const journalRows = rows.filter((r) => r.querySelectorAll('input').length === 4);
+    const termRows = rows.filter((r) => r.querySelectorAll('input').length === 2);
+    const weekButtons = [...document.querySelectorAll('.ip-week .btn')];
     return {
       text,
       inputs: inputs.length,
-      areas: areas.length,
-      journalRows: rows.length,
-      journalCols: rows[0]?.querySelectorAll('input').length ?? 0,
-      save: [...document.querySelectorAll('button')].filter((b) => (b.textContent ?? '').trim() === '保存').length,
+      selects: document.querySelectorAll('select').length,
+      journalRows: journalRows.length,
+      journalCols: journalRows[0]?.querySelectorAll('input').length ?? 0,
+      termRows: termRows.length,
+      termCols: termRows[0]?.querySelectorAll('input').length ?? 0,
+      tags: [...document.querySelectorAll('.ip-tag .ip-tagtext')].map((el) => el.textContent ?? ''),
+      weekCount: weekButtons.length,
+      weekOn: weekButtons.filter((b) => b.classList.contains('on')).length,
+      saveButtons: [...document.querySelectorAll('button')].filter((b) => (b.textContent ?? '').trim() === '保存本组').length,
       pushNow: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('立刻推一条')),
-      keywords: areas.some((a) => (a.value ?? '').includes('bearing fault diagnosis')),
-      glossary: areas.some((a) => (a.value ?? '').includes('|')),
-      tierShown: rows[0]?.querySelectorAll('input')[2]?.value ?? '',
       hasStepHint: /改完即生效/.test(text),
       pickPath: (text.match(/选择…/g) ?? []).length,
+      journalHead: document.querySelector('.ip-gridhead')?.textContent ?? '',
+      hasTierBasisColumn: /分区依据/.test(text),
     };
   });
-  check('三组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
-  check('节奏字段齐（间隔/时刻/上限/静默/星期/轮次/暂停到）', ['检查间隔', '推送时刻', '每天最多几条', '静默时段', '允许推送的星期', '对话轮次上限', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
-  check('关键词与术语表是可编辑文本域', cfg.keywords && cfg.glossary, `${cfg.areas} 个文本域`);
-  check('期刊集合逐行可编辑（刊名/ISSN/分区/依据/分组）', cfg.journalRows >= 20 && cfg.journalCols === 5, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
-  check('期刊行带分区标签', cfg.tierShown.includes('区') || cfg.tierShown.includes('Q1'), cfg.tierShown.slice(0, 24));
-  check('有「保存」按钮（不边打边存）', cfg.save >= 1 && !cfg.hasStepHint, `${cfg.save} 个保存按钮`);
+  check('四组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
+  check('节奏字段齐（间隔/上限/轮次/时刻/静默/星期/暂停到）', ['检查间隔', '每天最多几条', '对话轮次上限', '推送时刻', '静默时段', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
+  check('推送时刻与关键词是标签', cfg.tags.length >= 8 && cfg.tags.includes('10:30') && cfg.tags.some((x) => x.includes('bearing')), cfg.tags.slice(0, 6).join(' / '));
+  check('时间用下拉菜单选', cfg.selects >= 2, `${cfg.selects} 个菜单`);
+  check('星期是 1-7 的按钮且默认全亮', cfg.weekCount === 7 && cfg.weekOn === 7, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个`);
+  check('期刊表有表头且第四列已取消', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区标签/.test(cfg.journalHead) && /分组/.test(cfg.journalHead) && !cfg.hasTierBasisColumn, cfg.journalHead.trim().slice(0, 40));
+  check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
+  check('术语表按行增删（英文 / 中文两格）', cfg.termRows >= 30 && cfg.termCols === 2, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
+  check('每组各有「保存本组」', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
   check('下载目录带本机选择器', cfg.pickPath >= 1, `${cfg.pickPath} 个`);
 
@@ -195,9 +208,9 @@ try {
         console.log(`  截图（${panel}）没拍成：${err instanceof Error ? err.message : String(err)}`);
       }
     };
+    await shoot('detail', '.ip-title-lg', `${prefix}-detail.png`, 1600);
     await shoot('list', '.ip-list', `${prefix}-list.png`, 1100);
-    await shoot('detail', '.ip-detail', `${prefix}-detail.png`, 1500);
-    await shoot('settings', '.ip-jrows', `${prefix}-settings.png`, 2400);
+    await shoot('settings', '.ip-gridhead', `${prefix}-settings.png`, 2400);
   }
 } catch (err) {
   check('面板渲染检查', false, err instanceof Error ? err.message : String(err));

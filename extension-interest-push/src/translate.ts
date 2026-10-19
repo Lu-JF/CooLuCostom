@@ -13,8 +13,14 @@ import { join } from 'node:path';
 import { glossaryHash, parseGlossary } from './glossary.ts';
 import type { NewsItem, TranslationState } from './view-types.ts';
 
-/** 提示词版本；改动措辞时加一，缓存随之失效。 */
-export const PROMPT_VERSION = 2;
+/** 译文：标题与摘要分开存，面板上标题单独一行。 */
+export interface Translated {
+  title: string;
+  text: string;
+}
+
+/** 提示词版本；改动措辞或输出格式时加一，缓存随之失效。 */
+export const PROMPT_VERSION = 4;
 
 export interface TranslateDeps {
   dataDir: string;
@@ -25,20 +31,35 @@ export interface TranslateDeps {
   fetchImpl?: typeof fetch;
 }
 
-export function buildPrompt(abstract: string, glossaryLines: string[]): string {
+export function buildPrompt(item: Pick<NewsItem, 'title' | 'abstract'>, glossaryLines: string[]): string {
   const pairs = parseGlossary(glossaryLines);
   const terms = pairs.map(([en, zh]) => `${en} = ${zh}`).join('；');
   return [
-    '你是旋转机械故障诊断与健康管理领域的学术翻译。把下面的英文论文摘要译成简体中文。',
+    '你是旋转机械故障诊断与健康管理领域的学术翻译。把下面这篇论文的标题与摘要译成简体中文。',
     '要求：',
     '1. 忠于原文，不增删、不解释、不评论、不添加原文没有的结论或数据。',
     '2. 数字、单位、公式、变量名、模型与方法的英文名、数据集名、期刊名保持原样；缩写首次出现写成「中文（英文缩写）」。',
     '3. 术语按下表统一，表中没有的按领域惯例翻译：' + terms,
-    '4. 只输出译文本身，不要任何前言、标题、标注或说明。',
+    '4. 输出格式：第一行只写标题译文，然后空一行，再输出摘要译文。除此以外不要任何前言、标注或说明。',
+    '5. 源没有给摘要时，只输出标题译文，不要补写内容。',
     '',
-    '原文摘要：',
-    abstract,
+    '标题：' + item.title,
+    '',
+    '摘要：',
+    item.abstract,
   ].join('\n');
+}
+
+/** 把「标题 + 空行 + 摘要」的译文拆开；模型偶尔带上「标题：」一类的字样，一并去掉。 */
+export function splitTranslated(raw: string, hasAbstract = true): Translated {
+  const text = raw.replace(/\r\n/g, '\n').trim();
+  if (text === '') return { title: '', text: '' };
+  const strip = (s: string): string => s.replace(/^(标题|题目|摘要|Title|Abstract)\s*[:：]\s*/i, '').trim();
+  const at = text.search(/\n\s*\n/);
+  // 源没有摘要时请求里就没有摘要，模型只会给一行标题译文，那一行属于标题。
+  if (!hasAbstract) return at === -1 ? { title: strip(text), text: '' } : { title: strip(text.slice(0, at)), text: strip(text.slice(at).replace(/^\s+/, '')) };
+  if (at === -1) return { title: '', text: strip(text) };
+  return { title: strip(text.slice(0, at)), text: strip(text.slice(at).replace(/^\s+/, '')) };
 }
 
 /** 缓存键：提示词版本 + 模型 + 术语表内容。 */
@@ -71,20 +92,22 @@ function cachePath(dataDir: string, id: string): string {
   return join(dataDir, 'news', 'translated', `${id}.json`);
 }
 
-function readCache(dataDir: string, id: string): { text: string; promptHash: string } | null {
+function readCache(dataDir: string, id: string): (Translated & { promptHash: string }) | null {
   try {
-    const raw = JSON.parse(readFileSync(cachePath(dataDir, id), 'utf8')) as { text?: string; promptHash?: string };
-    if (typeof raw.text === 'string' && raw.text.trim() !== '') return { text: raw.text, promptHash: String(raw.promptHash ?? '') };
+    const raw = JSON.parse(readFileSync(cachePath(dataDir, id), 'utf8')) as { text?: string; title?: string; promptHash?: string };
+    if (typeof raw.text === 'string' && raw.text.trim() !== '') {
+      return { title: String(raw.title ?? ''), text: raw.text, promptHash: String(raw.promptHash ?? '') };
+    }
   } catch {
     /* 没有缓存或坏了：当作没有 */
   }
   return null;
 }
 
-function writeCache(dataDir: string, id: string, text: string, hash: string): void {
+function writeCache(dataDir: string, id: string, value: Translated, hash: string): void {
   try {
     mkdirSync(join(dataDir, 'news', 'translated'), { recursive: true });
-    writeFileSync(cachePath(dataDir, id), `${JSON.stringify({ text, promptHash: hash, at: Date.now() }, null, 2)}\n`, 'utf8');
+    writeFileSync(cachePath(dataDir, id), `${JSON.stringify({ ...value, promptHash: hash, at: Date.now() }, null, 2)}\n`, 'utf8');
   } catch {
     /* 落盘失败不影响本次返回 */
   }
@@ -130,10 +153,12 @@ export async function translate(item: NewsItem, deps: TranslateDeps): Promise<Tr
   const hash = promptHash(deps.model, deps.glossaryLines);
   const cached = readCache(deps.dataDir, item.id);
   if (cached && cached.promptHash === hash) {
-    return { ok: true, text: cached.text, cached: true, missing: missingTokens(item.abstract, cached.text), reason: null };
+    return { ok: true, title: cached.title, text: cached.text, cached: true, missing: missingTokens(item.abstract, cached.text), reason: null };
   }
-  if (item.abstract.trim() === '') return { ok: false, text: null, cached: false, missing: 0, reason: 'empty-abstract' };
-  if (!deps.baseUrl || !deps.apiKey) return { ok: false, text: null, cached: false, missing: 0, reason: 'no-endpoint' };
+  if (item.abstract.trim() === '' && item.title.trim() === '') {
+    return { ok: false, title: null, text: null, cached: false, missing: 0, reason: 'empty-abstract' };
+  }
+  if (!deps.baseUrl || !deps.apiKey) return { ok: false, title: null, text: null, cached: false, missing: 0, reason: 'no-endpoint' };
 
   const doFetch = deps.fetchImpl ?? fetch;
   try {
@@ -142,19 +167,20 @@ export async function translate(item: NewsItem, deps: TranslateDeps): Promise<Tr
       headers: { 'content-type': 'application/json', authorization: `Bearer ${deps.apiKey}` },
       body: JSON.stringify({
         model: deps.model,
-        input: [{ role: 'user', content: [{ type: 'input_text', text: buildPrompt(item.abstract, deps.glossaryLines) }] }],
+        input: [{ role: 'user', content: [{ type: 'input_text', text: buildPrompt(item, deps.glossaryLines) }] }],
         stream: false,
       }),
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      return { ok: false, text: null, cached: false, missing: 0, reason: `http ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}` };
+      return { ok: false, title: null, text: null, cached: false, missing: 0, reason: `http ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}` };
     }
-    const text = extractText(await res.json());
-    if (text === '') return { ok: false, text: null, cached: false, missing: 0, reason: 'empty-response' };
-    writeCache(deps.dataDir, item.id, text, hash);
-    return { ok: true, text, cached: false, missing: missingTokens(item.abstract, text), reason: null };
+    const raw = extractText(await res.json());
+    if (raw === '') return { ok: false, title: null, text: null, cached: false, missing: 0, reason: 'empty-response' };
+    const out = splitTranslated(raw, item.abstract.trim() !== '');
+    writeCache(deps.dataDir, item.id, out, hash);
+    return { ok: true, title: out.title, text: out.text, cached: false, missing: missingTokens(item.abstract, out.text), reason: null };
   } catch (err) {
-    return { ok: false, text: null, cached: false, missing: 0, reason: String((err as Error)?.message ?? err) };
+    return { ok: false, title: null, text: null, cached: false, missing: 0, reason: String((err as Error)?.message ?? err) };
   }
 }

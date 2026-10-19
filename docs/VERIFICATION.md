@@ -202,9 +202,9 @@ verify-instance → 12 项全部通过
 
 ```bash
 cd extension-interest-push
-npx vitest run           # 9 个文件 91 项通过
+npx vitest run           # 9 个文件 94 项通过
 npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.web.json --noEmit   # 0 错
-npm run build            # dist/console.js 16.5 KB · dist/console.css 0.8 KB
+npm run build            # dist/console.js ~20 KB · dist/console.css ~3 KB
 ```
 
 覆盖面：Crossref / arXiv / 每日论文榜三种源的规范化与抓取参数、arXiv 检索式与 Atom 解析、相关性过滤、
@@ -217,10 +217,12 @@ OpenAlex 与 Semantic Scholar 的摘要回填、去重落盘、调度判定（�
 | 检查 | 结果 |
 |---|---|
 | 实例自检 `node scripts/verify-instance.mjs` | 23 项通过（含兴趣推送 11 项：manifest 页与三个页签、产物可取、World 激活与三条读数、列表数据面、条目字段、调度读数、设置项齐全、分区标签） |
-| 渲染检查 `node extension-interest-push/scripts/check-panel-render.mjs 17788` | 21 项通过（列表 60 条、详情六个字段与两个按钮、翻译按钮、配置四组卡片 153 个输入框、28 行期刊逐行可编辑、保存按钮、两个调试按钮、路径选择器、无资源失败） |
+| 渲染检查 `node extension-interest-push/scripts/check-panel-render.mjs 17788` | 25 项通过（详情排第一且自上而下为标题/原文摘要/中文译文/详情、翻译按钮在摘要旁、刷新与换一篇、已取消下拉、列表 60 条且不再标「未读」、配置四组卡片、时刻与关键词为标签、时间用菜单、星期七个按钮全亮、期刊表有表头且第四列已取消、期刊 28 行 × 4 格、术语 46 行 × 2 格、每组一个「保存本组」、路径选择器、无资源失败） |
 | 真实抓取 | 一轮 190 条，入库 60 条：Crossref 43（28 家期刊）、arXiv 14、每日论文榜 3（相关性过滤前 39）；日期最新 2026-10-18，无未来日期 |
 | 摘要回填 | OpenAlex 与 Semantic Scholar 两轮合计补 31 条；两处都没有的条目在列表标「无摘要」 |
-| 翻译 | 12.2 秒，术语与数字保留（`大语言模型（LLMs）`、`协同边缘计算（CEC）`、`45%`）；第二次命中缓存 0.01 秒 |
+| 翻译 | **标题与摘要一起翻**，按「第一行标题、空行、摘要」拆开：有摘要的条目 13.0 秒给出两段（标题`SETAREH 变换：一种…`、摘要术语与数字保留），无摘要的条目 4.1 秒只给标题译文并落在标题位；第二次命中缓存 0.01 秒 |
+| 换一篇 | 在详情页点「换一篇」切到列表顺序的下一条，末尾回到第一条 |
+| 配置逐组保存 | 每组保存后回读校验：一致提示「已保存」，被夹到合法范围提示「个别数值按合法范围调整」，请求出错提示「未生效，请重试」 |
 | 下载原文 | 开放获取条目落盘 704572 字节到 `<数据目录>/news/papers/<编号>-<标题>.pdf` |
 | 事件投递 | `news.item` 进事件库，正文含标题、期刊与分区、作者与团队、DOI、爬取源、摘要、编号 |
 | 框架自带契约检查 | 未运行：上游源码树的依赖在目录改名后成断链，需 `CI=true pnpm install` 修复；等价的加载与声明校验由实例自检与真机加载提供 |

@@ -180,6 +180,48 @@ describe('推送与回执', () => {
     expect(log.crossref).toBe(0);
   });
 
+  it('没选过条目时，详情默认落在最新的一条上', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    const view = world.view('zh');
+    expect(view.items).toHaveLength(1);
+    expect(view.active?.id).toBe(view.items[0]!.id);
+    await world.invoke('detail', 'state', [], 'zh');
+    expect(world.view('zh').active?.id).toBe(view.items[0]!.id);
+  });
+
+  it('「换一篇」按列表顺序挪到下一条，末尾回到第一条', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-next-'));
+    const botDir = makeBotDir();
+    const first = { ...CROSSREF_ITEM, DOI: '10.1016/first', abstract: '<jats:p>First.</jats:p>', issued: { 'date-parts': [[2026, 10, 3]] } };
+    const second = { ...CROSSREF_ITEM, DOI: '10.1016/second', abstract: '<jats:p>Second.</jats:p>', issued: { 'date-parts': [[2026, 10, 2]] } };
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes('api.crossref.org')) {
+        return new Response(JSON.stringify({ message: { items: [first, second] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const cfg: InterestPushConfigSection = {
+      ...INTEREST_PUSH_DEFAULTS,
+      keywords: ['bearing fault diagnosis'],
+      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b', group: 'A' }],
+      pushTimes: ['10:30'],
+    };
+    const world = new InterestPushWorld({ cfg, timezone: 'Asia/Shanghai', dataDir, botDir, persist: (patch) => Object.assign(cfg, patch), fetchImpl: fake, now: () => FIXED });
+    const host = new FakeHost();
+    await world.start(host.asHost());
+    const rows = world.view('zh').items;
+    expect(rows).toHaveLength(2);
+
+    await world.invoke('detail', 'state', [rows[0]!.id], 'zh');
+    const afterFirst = viewOf(await world.invoke('detail', 'next', [], 'zh'));
+    expect(afterFirst.active?.id).toBe(rows[1]!.id);
+    // 末条再点一次回到第一条
+    const afterSecond = viewOf(await world.invoke('detail', 'next', [], 'zh'));
+    expect(afterSecond.active?.id).toBe(rows[0]!.id);
+  });
+
   it('收到「不感兴趣」的回执后，这条不再被推送', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
@@ -265,7 +307,8 @@ describe('控制台声明', () => {
     await world.start(host.asHost());
     const decl = world.console('zh');
     expect(decl.label).toBe('兴趣推送');
-    expect(decl.panels?.map((p) => p.id)).toEqual(['list', 'detail', 'settings']);
+    // 详情排第一：使用者真正要看的是这一页。
+    expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'settings']);
     expect(decl.promptDocs?.[0]?.role).toBe('envPrompt');
     expect(decl.lamps?.length).toBe(3);
     expect(decl.badges?.[0]?.label).toBe('未读');

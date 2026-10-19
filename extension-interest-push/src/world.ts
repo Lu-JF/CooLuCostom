@@ -156,8 +156,9 @@ export class InterestPushWorld implements World {
         { label: t.badges.paused, value: paused ? 'on' : 'off', tone: paused ? 'off' : 'plain' },
       ],
       panels: [
-        { id: 'list', title: t.panel.listTitle, description: t.panel.listDesc },
+        // 详情排第一：这里才是使用者真正要看的一页。
         { id: 'detail', title: t.panel.detailTitle, description: t.panel.detailDesc },
+        { id: 'list', title: t.panel.listTitle, description: t.panel.listDesc },
         { id: 'settings', title: t.panel.settingsTitle, description: t.panel.settingsDesc },
       ],
       invoke: (panel, method, args) => this.invoke(panel, method, args, language),
@@ -456,8 +457,25 @@ export class InterestPushWorld implements World {
           if (id) this.activeId = id;
           return { ok: true, reason: null, view: this.view(language) };
         }
+        if (method === 'refresh') {
+          await this.run('manual');
+          return { ok: true, reason: null, view: this.view(language) };
+        }
         if (method === 'translate') return await this.translateActive(language);
         if (method === 'download') return await this.downloadActive(language);
+        if (method === 'next') {
+          // 「不感兴趣，换一篇」：按列表顺序挪到下一条（已读的照样可以再看），末尾回到第一条。
+          // 以「此刻实际在看的那条」为基准：没显式选过时它是最新一条，而不是 -1。
+          const current = this.activeItem();
+          const at = current === null ? -1 : this.items.findIndex((i) => i.id === current.id);
+          const next = this.items.length === 0 ? undefined : this.items[(at + 1 + this.items.length) % this.items.length];
+          if (next) {
+            this.activeId = next.id;
+            if (!this.state.read.includes(next.id)) this.state.read.push(next.id);
+            this.saveState();
+          }
+          return { ok: Boolean(next), reason: next ? null : interestText(language).errors.noActive, view: this.view(language) };
+        }
         if (method === 'dismiss') {
           const item = this.activeItem();
           if (item && !this.state.dismissed.includes(item.id)) this.state.dismissed.push(item.id);
@@ -524,9 +542,14 @@ export class InterestPushWorld implements World {
     };
   }
 
+  /**
+   * 当前要看的条目。详情页现在排第一个，打开时就该有内容可看，
+   * 因此没选过或选中的那条已经被挤出列表时，默认落在最新的一条上。
+   */
   private activeItem(): NewsItem | null {
-    if (this.activeId === null) return null;
-    return this.items.find((i) => i.id === this.activeId) ?? null;
+    if (this.items.length === 0) return null;
+    const hit = this.activeId === null ? undefined : this.items.find((i) => i.id === this.activeId);
+    return hit ?? this.items[0] ?? null;
   }
 
   private async translateActive(language: Language): Promise<unknown> {
@@ -535,7 +558,7 @@ export class InterestPushWorld implements World {
     if (!item) return { ok: false, reason: t.errors.noActive, view: this.view(language) };
     const model = resolvePetModel(this.opts.botDir);
     if (!model) {
-      const state: TranslationState = { ok: false, text: null, cached: false, missing: 0, reason: t.errors.noEndpoint };
+      const state: TranslationState = { ok: false, title: null, text: null, cached: false, missing: 0, reason: t.errors.noEndpoint };
       this.translations.set(item.id, state);
       return { ok: false, reason: t.errors.noEndpoint, view: this.view(language) };
     }

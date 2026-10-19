@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildPrompt, extractText, missingTokens, promptHash, translate } from '../src/translate.ts';
+import { buildPrompt, extractText, missingTokens, promptHash, splitTranslated, translate } from '../src/translate.ts';
 import type { NewsItem } from '../src/view-types.ts';
 
 const ITEM: NewsItem = {
@@ -44,14 +44,31 @@ describe('译文提取', () => {
 });
 
 describe('提示词', () => {
-  it('写明忠于原文、缩写与术语表，且不带人设措辞', () => {
-    const prompt = buildPrompt(ITEM.abstract, ['bearing | 轴承', 'fault diagnosis | 故障诊断']);
+  it('写明忠于原文、缩写与术语表，标题也一并翻，且不带人设措辞', () => {
+    const prompt = buildPrompt(ITEM, ['bearing | 轴承', 'fault diagnosis | 故障诊断']);
     expect(prompt).toContain('bearing = 轴承');
     expect(prompt).toContain('不增删');
-    expect(prompt).toContain('只输出译文本身');
+    expect(prompt).toContain('第一行只写标题译文');
+    expect(prompt).toContain(`标题：${ITEM.title}`);
     expect(prompt).toContain(ITEM.abstract);
     expect(prompt).not.toContain('气泡');
     expect(prompt).not.toContain('桌宠');
+  });
+
+  it('译文按「标题 + 空行 + 摘要」拆开，并去掉模型自带的字样', () => {
+    const both = splitTranslated('变转速下的轴承故障诊断\n\n本文提出一种轻量网络，准确率 99.2%。');
+    expect(both.title).toBe('变转速下的轴承故障诊断');
+    expect(both.text).toBe('本文提出一种轻量网络，准确率 99.2%。');
+    const labeled = splitTranslated('标题：变转速下的轴承故障诊断\n\n摘要：本文提出一种轻量网络。');
+    expect(labeled.title).toBe('变转速下的轴承故障诊断');
+    expect(labeled.text).toBe('本文提出一种轻量网络。');
+    const onlyBody = splitTranslated('只有一段摘要译文。');
+    expect(onlyBody.title).toBe('');
+    expect(onlyBody.text).toBe('只有一段摘要译文。');
+    // 源没给摘要：请求里没有摘要，模型只会给一行标题译文，那行就是标题。
+    const titleOnly = splitTranslated('变转速下的轴承故障诊断', false);
+    expect(titleOnly.title).toBe('变转速下的轴承故障诊断');
+    expect(titleOnly.text).toBe('');
   });
 
   it('术语表变化会让缓存键变化', () => {
@@ -83,6 +100,7 @@ describe('翻译调用', () => {
     const first = await translate(ITEM, deps);
     expect(first.ok).toBe(true);
     expect(first.text).toContain('轻量网络');
+    expect(first.title).toBe('');
     expect(first.cached).toBe(false);
     expect(calls).toBe(1);
     expect(readFileSync(join(dataDir, 'news', 'translated', `${ITEM.id}.json`), 'utf8')).toContain('轻量网络');
@@ -94,7 +112,7 @@ describe('翻译调用', () => {
 
   it('没有摘要或没有端点时给出原因', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-tr2-'));
-    const empty = await translate({ ...ITEM, abstract: '   ' }, { dataDir, baseUrl: 'x', apiKey: 'y', model: 'm', glossaryLines: [] });
+    const empty = await translate({ ...ITEM, title: '   ', abstract: '   ' }, { dataDir, baseUrl: 'x', apiKey: 'y', model: 'm', glossaryLines: [] });
     expect(empty.reason).toBe('empty-abstract');
     const noKey = await translate(ITEM, { dataDir, baseUrl: '', apiKey: '', model: 'm', glossaryLines: [] });
     expect(noKey.reason).toBe('no-endpoint');

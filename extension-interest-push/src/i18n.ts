@@ -20,7 +20,6 @@ export interface InterestText {
     refresh: string;
     checking: string;
     empty: string;
-    unread: string;
     read: string;
     noAbstract: string;
     dismissed: string;
@@ -29,6 +28,9 @@ export interface InterestText {
   };
   detail: {
     pick: string;
+    paperTitle: string;
+    refresh: string;
+    next: string;
     authors: string;
     team: string;
     journal: string;
@@ -78,6 +80,24 @@ export interface InterestText {
     glossary: string;
     addJournal: string;
     remove: string;
+    groupTags: string;
+    addTime: string;
+    addKeyword: string;
+    keywordPlaceholder: string;
+    quietStart: string;
+    quietEnd: string;
+    saveSection: string;
+    savedSection: (name: string) => string;
+    savedSectionAdjusted: (name: string) => string;
+    saveSectionFailed: (name: string) => string;
+    journalNote: string;
+    colLabel: string;
+    colIssn: string;
+    colTier: string;
+    colGroup: string;
+    colEnglish: string;
+    colChinese: string;
+    addTerm: string;
     journalLabel: string;
     journalIssn: string;
     journalTier: string;
@@ -116,7 +136,6 @@ const zh: InterestText = {
     refresh: '立即检查一次',
     checking: '正在检查…',
     empty: '还没有抓到条目。检查一次，或把关键词和期刊放宽些。',
-    unread: '未读',
     read: '已读',
     noAbstract: '无摘要',
     dismissed: '不再推送',
@@ -124,7 +143,10 @@ const zh: InterestText = {
     hint: '订阅的论文会以气泡对话介绍；详情在这里看。',
   },
   detail: {
-    pick: '从左边列表选一条。',
+    pick: '还没有条目。先去「配置」页签点一次检查。',
+    paperTitle: '论文标题',
+    refresh: '刷新',
+    next: '换一篇',
     authors: '作者',
     team: '团队',
     journal: '期刊',
@@ -157,17 +179,17 @@ const zh: InterestText = {
     groupSources: '数据源',
     groupTranslate: '翻译',
     checkMinutes: '检查间隔（分钟）',
-    pushTimes: '推送时刻（逗号分隔，24 小时制）',
+    pushTimes: '推送时刻',
     dailyCap: '每天最多几条',
-    quiet: '静默时段（起,止）',
+    quiet: '静默时段',
     pushDays: '允许推送的星期（1=周一…7=周日）',
     maxRounds: '气泡对话轮次上限',
     pausedUntil: '暂停到（时间戳毫秒，0 为不暂停）',
     resumNow: '取消暂停',
     clearPause: '清空',
-    keywords: '研究领域关键词（每行一个）',
+    keywords: '研究领域关键词',
     journals: '期刊集合',
-    arxivCats: 'arXiv 分类（逗号分隔）',
+    arxivCats: 'arXiv 分类',
     windowDays: '只看最近多少天',
     rowsPerJournal: '每刊每次取多少条',
     mailto: 'Crossref 邮箱（polite pool）',
@@ -175,6 +197,24 @@ const zh: InterestText = {
     glossary: '翻译术语表（每行「英文 | 中文」）',
     addJournal: '增加一行',
     remove: '删除',
+    groupTags: '点右侧「✕」删掉，用下面的菜单或输入框增加',
+    addTime: '增加时刻',
+    addKeyword: '增加关键词',
+    keywordPlaceholder: '输入关键词后回车',
+    quietStart: '静默起',
+    quietEnd: '静默止',
+    saveSection: '保存本组',
+    savedSection: (name) => `${name}已保存`,
+    savedSectionAdjusted: (name) => `${name}已保存，个别数值按合法范围调整`,
+    saveSectionFailed: (name) => `${name}未生效，请重试`,
+    journalNote: '分区标签参照 2025 中科院分区表与 JCR 2024（逐年变化，标签可直接改）；依据不在表格里编辑。',
+    colLabel: '刊名',
+    colIssn: 'ISSN',
+    colTier: '分区标签',
+    colGroup: '分组',
+    colEnglish: '英文',
+    colChinese: '中文',
+    addTerm: '增加词条',
     journalLabel: '刊名',
     journalIssn: 'ISSN',
     journalTier: '分区标签',
@@ -212,7 +252,6 @@ const en: InterestText = {
     refresh: 'Check now',
     checking: 'Checking…',
     empty: 'Nothing crawled yet. Run a check, or widen the keywords and journals.',
-    unread: 'unread',
     read: 'read',
     noAbstract: 'no abstract',
     dismissed: 'not pushed again',
@@ -220,7 +259,10 @@ const en: InterestText = {
     hint: 'Subscribed papers are introduced in a bubble chat; details live here.',
   },
   detail: {
-    pick: 'Pick an item on the left.',
+    pick: 'Nothing yet. Run a check on the Settings tab.',
+    paperTitle: 'Title',
+    refresh: 'Refresh',
+    next: 'Next paper',
     authors: 'Authors',
     team: 'Team',
     journal: 'Venue',
@@ -253,17 +295,17 @@ const en: InterestText = {
     groupSources: 'Sources',
     groupTranslate: 'Translation',
     checkMinutes: 'Check interval (minutes)',
-    pushTimes: 'Push times (comma separated, 24h)',
+    pushTimes: 'Push times',
     dailyCap: 'Max pushes per day',
-    quiet: 'Quiet hours (start,end)',
+    quiet: 'Quiet hours',
     pushDays: 'Allowed weekdays (1=Mon…7=Sun)',
     maxRounds: 'Max bubble rounds',
     pausedUntil: 'Paused until (epoch ms, 0 = off)',
     resumNow: 'Resume now',
     clearPause: 'Clear',
-    keywords: 'Research keywords (one per line)',
+    keywords: 'Research keywords',
     journals: 'Journal set',
-    arxivCats: 'arXiv categories (comma separated)',
+    arxivCats: 'arXiv categories',
     windowDays: 'Only last N days',
     rowsPerJournal: 'Rows per journal',
     mailto: 'Crossref mailto (polite pool)',
@@ -271,6 +313,24 @@ const en: InterestText = {
     glossary: 'Translation glossary (one "en | zh" per line)',
     addJournal: 'Add row',
     remove: 'Remove',
+    groupTags: 'Click ✕ to remove; add with the menu or box below',
+    addTime: 'Add time',
+    addKeyword: 'Add keyword',
+    keywordPlaceholder: 'Type a keyword and press Enter',
+    quietStart: 'Quiet from',
+    quietEnd: 'Quiet to',
+    saveSection: 'Save',
+    savedSection: (name) => `${name} saved`,
+    savedSectionAdjusted: (name) => `${name} saved with some values clamped`,
+    saveSectionFailed: (name) => `${name} did not take effect, retry`,
+    journalNote: 'Tier labels follow the 2025 CAS list and JCR 2024; edit the label directly. The basis is not edited here.',
+    colLabel: 'Journal',
+    colIssn: 'ISSN',
+    colTier: 'Tier',
+    colGroup: 'Group',
+    colEnglish: 'English',
+    colChinese: 'Chinese',
+    addTerm: 'Add term',
     journalLabel: 'Journal',
     journalIssn: 'ISSN',
     journalTier: 'Tier',
