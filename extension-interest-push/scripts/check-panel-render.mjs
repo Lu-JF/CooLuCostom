@@ -243,7 +243,7 @@ try {
       titles: rows.slice(0, 3).map((r) => r.querySelector('.ip-title')?.textContent ?? ''),
       text: box?.textContent ?? '',
       note: document.querySelector('.ip-note')?.textContent ?? '',
-      refresh: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('立即检查一次')),
+      refresh: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('重新爬取一次')),
     };
   });
   check('列表里有条目', list.rows > 0, `${list.rows} 条`);
@@ -309,7 +309,7 @@ try {
   check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
   check('有「期刊延迟天数」字段', cfg.text.includes('期刊延迟天数'), '');
   check('每组各有自己的保存按钮', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
-  check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
+  check('有「重新爬取一次」与「立刻推一条」', cfg.text.includes('重新爬取一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');
   check('下载目录带本机选择器', cfg.pickPath >= 1, `${cfg.pickPath} 个`);
   check('页面里已无「未读」字样', !cfg.bodyUnread, cfg.bodyUnread ? '还看得到' : '');

@@ -313,6 +313,18 @@ HTTP 4xx/5xx 不重试（重试也白搭）。单测钉住了「重试一次就�
 - **手动试推不计入「今日推送」**：试推原来是 `pushedToday += 1`，上限 2 条时读数长成 `21/2`。
   现在 `pushItem(item, key, countToday=false)`，试推只记 `pushedIds`（避免重复推），不占配额。
 
+### 控制台的 .sheet 没有左右内边距
+
+控制台这一层把 `.sheet` 覆盖成 `padding: 22px 0`（`web/public/styles.css` 里给表单页用的紧凑版），
+所以卡片里的内容会直接贴着圆角边框。自己的面板要在 `.ip-shell .sheet` 上补回 `18px 20px 16px`，
+否则看上去像「内容溢出卡片」。同理 `.sheet > h3` 的下边距也要自己给，框架那份被压掉了。
+
+### 「已暂停 off」这种双重否定
+
+世界徽章原来是 `{label:'已暂停', value: paused ? 'on' : 'off'}`，没暂停时显示成「已暂停 off」——
+读者只能猜它是「没暂停」。改成**只在真的暂停时挂**这个徽章，并且值写成暂停到哪一刻（`10/20 23:59`），
+没暂停就干脆不出现。
+
 ### 模块级常量的浅拷贝（有真 bug）
 
 `{ ...EMPTY_STATE }` 只复制了顶层：`dismissed` / `read` / `pushedIds` / `conditional` / `abstractTried`

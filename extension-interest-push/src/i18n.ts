@@ -173,7 +173,7 @@ const zh: InterestText = {
   },
   badges: { unread: '未读', journals: '期刊', keywords: '关键词', paused: '已暂停' },
   list: {
-    refresh: '立即检查一次',
+    refresh: '重新爬取一次',
     checking: '正在检查…',
     empty: '还没有抓到条目。检查一次，或把关键词和期刊放宽些。',
     read: '已读',
@@ -227,7 +227,7 @@ const zh: InterestText = {
   settings: {
     save: '保存',
     saved: '已保存',
-    checkNow: '立即检查一次',
+    checkNow: '重新爬取一次',
     checkNowHint: '重新抓一遍所有源、回填摘要，约半分钟到一分钟；不用等，可以切到别的页签',
     pushNow: '立刻推一条（试）',
     checking: '正在检查…',
@@ -324,7 +324,7 @@ const en: InterestText = {
   },
   badges: { unread: 'unread', journals: 'journals', keywords: 'keywords', paused: 'paused' },
   list: {
-    refresh: 'Check now',
+    refresh: 'Re-crawl now',
     checking: 'Checking…',
     empty: 'Nothing crawled yet. Run a check, or widen the keywords and journals.',
     read: 'read',
@@ -378,7 +378,7 @@ const en: InterestText = {
   settings: {
     save: 'Save',
     saved: 'Saved',
-    checkNow: 'Check now',
+    checkNow: 'Re-crawl now',
     checkNowHint: 'Re-crawl every source and backfill abstracts; about 30–60 seconds. You do not have to wait.',
     pushNow: 'Push one now (test)',
     checking: 'Checking…',

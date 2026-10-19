@@ -461,8 +461,8 @@ describe('控制台声明', () => {
     expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'records', 'settings']);
     expect(decl.promptDocs?.[0]?.role).toBe('envPrompt');
     expect(decl.lamps?.length).toBe(3);
-    // 选项卡上方不再有「未读」标签（列表里已读的才标）。
-    expect(decl.badges?.map((b) => b.label)).toEqual(['期刊', '关键词', '已暂停']);
+    // 选项卡上方只有期刊与关键词两个标签；「已暂停」只在真的暂停时才挂（避免「已暂停 off」这种双重否定）。
+    expect(decl.badges?.map((b) => b.label)).toEqual(['期刊', '关键词']);
     expect(world.envPromptVars()['interestpush.status']).toContain('今日推送');
   });
 });

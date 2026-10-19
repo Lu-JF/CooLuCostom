@@ -250,7 +250,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
     busy = null;
   };
 
-  // 只留「换一篇」：抓新数据这件事在列表页与配置页都有「立即检查一次」，这里再来一个就是重复。
+  // 只留「换一篇」：抓新数据这件事在列表页与配置页都有「重新爬取一次」，这里再来一个就是重复。
   const top = ui.rowbar();
   const note = ui.h('span', 'ip-note');
   const nextBtn = ui.button(t.detail.next, {
@@ -628,7 +628,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     variant: 'primary',
     onClick: () => {
       void (async () => {
-        // 「立即检查一次」= 重新抓一遍所有源并回填摘要，要几十秒。改成行内状态，页面照常能用。
+        // 「重新爬取一次」= 重新抓一遍所有源并回填摘要，要几十秒。改成行内状态，页面照常能用。
         checkBtn.disabled = true;
         checkStatus.set(t.settings.checking, 'busy');
         try {
@@ -993,16 +993,12 @@ function mountRecords(ctx: ConsolePanelContext): void {
   };
 
   const sheet = ui.sheet({ title: t.panel.recordsTitle, desc: t.panel.recordsDesc });
-  const bar = ui.rowbar();
-  const note = ui.h('span', 'ip-note');
-  bar.append(note);
   const body = ui.h('div', 'ip-list');
-  sheet.body.append(bar, body);
+  sheet.body.append(body);
   ctx.root.appendChild(sheet.el);
 
   function render(): void {
     const recs = view?.records ?? [];
-    note.textContent = `${recs.length}`;
     body.replaceChildren();
     if (recs.length === 0) {
       body.appendChild(ui.placeholder(t.records.empty));

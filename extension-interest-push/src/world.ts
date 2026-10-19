@@ -174,7 +174,10 @@ export class InterestPushWorld implements World {
       badges: [
         { label: t.badges.journals, value: this.opts.cfg.journals.length, tone: 'plain' },
         { label: t.badges.keywords, value: this.opts.cfg.keywords.length, tone: 'plain' },
-        { label: t.badges.paused, value: paused ? 'on' : 'off', tone: paused ? 'off' : 'plain' },
+        // 没暂停就不挂这个标签：「已暂停 off」等于双重否定，看不明白。暂停时直接写出到哪一刻。
+        ...(paused
+          ? [{ label: t.badges.paused, value: this.localTime(this.opts.cfg.pausedUntil), tone: 'off' as const }]
+          : []),
       ],
       panels: [
         // 详情排第一：这里才是使用者真正要看的一页。
