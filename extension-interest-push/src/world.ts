@@ -497,7 +497,7 @@ export class InterestPushWorld implements World {
     }
   }
 
-  private async pushItem(item: NewsItem, windowKey: string | null): Promise<void> {
+  private async pushItem(item: NewsItem, windowKey: string | null, countToday = true): Promise<void> {
     const host = this.host;
     if (!host) return;
     // 先把速评评好：气泡的第一段就是速评与打分，缺了它推送就只剩摘要。
@@ -514,7 +514,8 @@ export class InterestPushWorld implements World {
       { trigger: 'flush' },
     );
     this.state.pushedIds = [...this.state.pushedIds, item.id].slice(-MAX_PUSHED);
-    this.state.pushedToday += 1;
+    // 手动试推不计入「今日推送」，否则上限 2 条时会显示成 21/2 这种自相矛盾的读数。
+    if (countToday) this.state.pushedToday += 1;
     this.state.lastPushAt = this.now();
     this.state.lastWindowKey = windowKey ?? this.state.lastWindowKey;
     // 页签跟到刚推的这篇：「推送」页看到的就是气泡刚讲的那一篇，两处永远一致。
@@ -600,7 +601,7 @@ export class InterestPushWorld implements World {
         if (target === null) {
           return { ok: false, reason: t.errors.nothingToPush, view: this.view(language) };
         }
-        await this.pushItem(target, null);
+        await this.pushItem(target, null, false);
         this.saveState();
         return { ok: true, reason: null, view: this.view(language) };
       }
@@ -816,8 +817,18 @@ export class InterestPushWorld implements World {
       }
       return v;
     };
-    const times = (value: unknown, fallback: string[]): string[] => {
+    /** 静默起止：只校验合法性，不排序——跨夜时段（22:30 → 08:30）排一下就反了。 */
+    const quietPair = (value: unknown, fallback: string[]): string[] => {
       const list = (Array.isArray(value) ? value : String(value ?? '').split(','))
+        .map((v) => String(v).trim())
+        .filter((v) => parseTime(v) !== null);
+      const first = list[0] ?? fallback[0] ?? '22:30';
+      const second = list[1] ?? fallback[1] ?? '08:30';
+      return [first, second];
+    };
+    const times = (value: unknown, fallback: string[]): string[] => {
+      if (value === undefined) return fallback;
+      const list = (Array.isArray(value) ? value : String(value).split(','))
         .map((v) => String(v).trim())
         .filter((v) => parseTime(v) !== null);
       const uniq = [...new Set(list)].sort((a, b) => {
@@ -836,7 +847,7 @@ export class InterestPushWorld implements World {
         .map((v) => String(v).trim())
         .filter((v) => v !== '')
         .slice(0, max);
-    const journals: JournalEntry[] = (Array.isArray(raw.journals) ? raw.journals : [])
+    const journals: JournalEntry[] = (Array.isArray(raw.journals) ? raw.journals : cfg.journals)
       .map((j) => (j ?? {}) as Record<string, unknown>)
       .map((j) => ({
         label: String(j.label ?? '').trim(),
@@ -847,6 +858,7 @@ export class InterestPushWorld implements World {
       }))
       .filter((j) => j.label !== '' && j.issn !== '')
       .slice(0, 200);
+    // 空数组是合法的（使用者就是要清空）；只有「键都没给」才保持原样。
     const days = (Array.isArray(raw.pushDays) ? raw.pushDays : [])
       .map((v) => Math.round(Number(v)))
       .filter((v) => Number.isFinite(v) && v >= 1 && v <= 7);
@@ -855,14 +867,15 @@ export class InterestPushWorld implements World {
       checkMinutes: num(raw.checkMinutes, 5, 1440, cfg.checkMinutes),
       pushTimes: times(raw.pushTimes, cfg.pushTimes),
       dailyCap: num(raw.dailyCap, 1, 10, cfg.dailyCap),
-      quiet: times(raw.quiet, cfg.quiet).slice(0, 2),
-      pushDays: days.length > 0 ? [...new Set(days)].sort((a, b) => a - b) : (clamped = true, cfg.pushDays),
+      // 静默时段是两个时刻的「起 → 止」，顺序有意义（22:30→08:30 是跨夜），不能像时刻表那样排序。
+      quiet: quietPair(raw.quiet, cfg.quiet),
+      pushDays: raw.pushDays === undefined ? cfg.pushDays : days.length > 0 ? [...new Set(days)].sort((a, b) => a - b) : (clamped = true, cfg.pushDays),
       maxRounds: num(raw.maxRounds, 1, 5, cfg.maxRounds),
       pausedUntil: Math.max(0, Math.round(Number(raw.pausedUntil ?? 0)) || 0),
-      keywords: lines(raw.keywords, 30),
+      keywords: raw.keywords === undefined ? cfg.keywords : lines(raw.keywords, 30),
       journals,
-      glossary: lines(raw.glossary, 400),
-      arxivCats: (Array.isArray(raw.arxivCats) ? raw.arxivCats : String(raw.arxivCats ?? '').split(','))
+      glossary: raw.glossary === undefined ? cfg.glossary : lines(raw.glossary, 400),
+      arxivCats: raw.arxivCats === undefined ? cfg.arxivCats : (Array.isArray(raw.arxivCats) ? raw.arxivCats : String(raw.arxivCats).split(','))
         .map((v) => String(v).trim())
         .filter((v) => v !== '')
         .slice(0, 20),

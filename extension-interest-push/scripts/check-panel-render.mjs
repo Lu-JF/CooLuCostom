@@ -284,7 +284,7 @@ try {
       tags: [...document.querySelectorAll('.ip-tag .ip-tagtext')].map((el) => el.textContent ?? ''),
       weekCount: weekButtons.length,
       weekOn: weekButtons.filter((b) => b.classList.contains('on')).length,
-      saveButtons: [...document.querySelectorAll('button')].filter((b) => (b.textContent ?? '').trim() === '保存本组').length,
+      saveButtons: [...document.querySelectorAll('button')].filter((b) => /^保存/.test((b.textContent ?? '').trim())).length,
       pushNow: [...document.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('立刻推一条')),
       hasStepHint: /改完即生效/.test(text),
       pickPath: (text.match(/选择…/g) ?? []).length,
@@ -307,8 +307,8 @@ try {
   check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
   check('术语表按行增删（英文 / 中文两格），且标签里没有「每行」说明', cfg.termRows >= 30 && cfg.termCols === 2 && !cfg.hasPerLineHint, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
   check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
-  check('有「期刊延迟窗口」字段', cfg.text.includes('期刊只抓'), '');
-  check('每组各有「保存本组」', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
+  check('有「期刊延迟天数」字段', cfg.text.includes('期刊延迟天数'), '');
+  check('每组各有自己的保存按钮', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');
   check('下载目录带本机选择器', cfg.pickPath >= 1, `${cfg.pickPath} 个`);
@@ -316,7 +316,7 @@ try {
 
   // 真点一次「保存本组」：验证写回与回读校验这条链路在真宿主里也通。
   const clickedSave = await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').trim() === '保存本组');
+    const btn = [...document.querySelectorAll('button')].find((b) => /^保存/.test((b.textContent ?? '').trim()));
     if (!btn) return false;
     btn.click();
     return true;
@@ -326,7 +326,36 @@ try {
     toast: /已保存/.test(document.body.textContent ?? ''),
     failed: /未生效/.test(document.body.textContent ?? ''),
   }));
-  check('点「保存本组」会提示保存成功', clickedSave && saved.toast && !saved.failed, saved.failed ? '提示未生效' : '');
+  // 字段排版：标签宽度统一、不压住控件；控件与标签在同一行（不换行错位）
+  const align = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.ip-shell .sheet')];
+    return cards
+      .map((card) => {
+        const rows = [...card.querySelectorAll('.ip-fieldrow')].filter((r) => r.querySelector('.ip-fieldlabel'));
+        const widths = [...new Set(rows.map((r) => Math.round(r.querySelector('.ip-fieldlabel').getBoundingClientRect().width)))];
+        let overlap = 0;
+        let crossed = 0;
+        for (const row of rows) {
+          const label = row.querySelector('.ip-fieldlabel');
+          const ctrl = row.lastElementChild;
+          if (!ctrl || ctrl === label) continue;
+          const a = label.getBoundingClientRect();
+          const b = ctrl.getBoundingClientRect();
+          if (a.right > b.left + 2) overlap += 1;
+          if (Math.abs(a.top - b.top) > a.height) crossed += 1;
+        }
+        return { title: (card.querySelector('h3')?.textContent ?? '').trim(), n: rows.length, widths, overlap, crossed };
+      })
+      .filter((c) => c.n > 0);
+  });
+  const badAlign = align.filter((c) => c.widths.length > 1 || c.overlap > 0);
+  check(
+    '字段排版整齐（标签等宽、不压控件）',
+    badAlign.length === 0,
+    align.map((c) => `${c.title}: ${c.n} 行 宽${c.widths.join('/')} 压${c.overlap} 错${c.crossed}`).join(' · '),
+  );
+
+  check('点分组保存会提示保存成功', clickedSave && saved.toast && !saved.failed, saved.failed ? '提示未生效' : '');
 
   // ---- 兴趣记录页签：先从「推送」页收一条进来，再看它有没有进列表
   await openPanel('detail', '.ip-ov-title');

@@ -223,9 +223,19 @@ function renderStars(el: HTMLElement, total: number | null): void {
   }
 }
 
+/** 一张卡里的小节：小标题 + 内容，给配置页做出段落层次（卡片 → 小节 → 字段）。 */
+function block(ui: ConsolePanelContext['ui'], title: string, ...children: HTMLElement[]): HTMLElement {
+  const wrap = ui.h('div', 'ip-block');
+  const body = ui.h('div', 'ip-blockbody');
+  body.append(...children);
+  wrap.append(ui.h('div', 'ip-blockhead', title), body);
+  return wrap;
+}
+
 function mountDetail(ctx: ConsolePanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
+  ctx.root.classList.add('ip-shell');
   let view: InterestPushView | null = null;
   let busy: { dispose(): void } | null = null;
   /** 正在叫模型评速评：期间不重复发请求，也不显示「还没评过」。 */
@@ -245,6 +255,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   const note = ui.h('span', 'ip-note');
   const nextBtn = ui.button(t.detail.next, {
     size: 'sm',
+    variant: 'primary',
     onClick: () => {
       void (async () => {
         try {
@@ -300,6 +311,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   const translateStatus = makeStatus(ui);
   const translateBtn = ui.button(t.detail.translate, {
     size: 'sm',
+    variant: 'primary',
     onClick: () => {
       void (async () => {
         // 翻译要十几秒：不占整页，只在按钮旁边转圈，翻完在这里写结果。
@@ -465,6 +477,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
 function mountList(ctx: ConsolePanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
+  ctx.root.classList.add('ip-shell');
   let view: InterestPushView | null = null;
   let busy: { dispose(): void } | null = null;
 
@@ -482,6 +495,7 @@ function mountList(ctx: ConsolePanelContext): void {
   const note = ui.h('span', 'ip-note');
   const refresh = ui.button(t.list.refresh, {
     size: 'sm',
+    variant: 'primary',
     onClick: () => {
       void (async () => {
         setBusy(true);
@@ -592,6 +606,7 @@ function mountList(ctx: ConsolePanelContext): void {
 function mountSettings(ctx: ConsolePanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
+  ctx.root.classList.add('ip-shell');
   let view: InterestPushView | null = null;
   let busy: { dispose(): void } | null = null;
 
@@ -610,6 +625,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const checkStatus = makeStatus(ui);
   const checkBtn = ui.button(t.settings.checkNow, {
     size: 'sm',
+    variant: 'primary',
     onClick: () => {
       void (async () => {
         // 「立即检查一次」= 重新抓一遍所有源并回填摘要，要几十秒。改成行内状态，页面照常能用。
@@ -680,17 +696,13 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const pauseDate = ui.input({ type: 'date' });
   const resumeBtn = ui.button(t.settings.resumNow, { size: 'sm', onClick: () => { pauseDate.value = ''; } });
   pauseRow.append(fieldRow(ui, t.settings.pausedUntil, pauseDate), resumeBtn);
-  const cadenceSave = ui.button(t.settings.saveSection, { variant: 'primary', size: 'sm', onClick: () => void saveCard('cadence') });
+  const cadenceSave = ui.button(t.settings.saveSectionOf(t.settings.groupPush), { variant: 'primary', size: 'sm', onClick: () => void saveCard('cadence') });
   const cadenceFoot = ui.rowbar();
   cadenceFoot.append(cadenceSave);
   cadence.body.append(
-    numbersRow,
-    abstractBox.el,
-    fieldRow(ui, t.settings.pushTimes, ui.h('div')),
-    pushTimesEditor.el,
-    fieldRow(ui, t.settings.quiet, quietRow),
-    weekRow,
-    pauseRow,
+    block(ui, t.settings.blockFrequency, numbersRow),
+    block(ui, t.settings.blockWindows, fieldRow(ui, t.settings.pushTimes, ui.h('div')), pushTimesEditor.el, fieldRow(ui, t.settings.quiet, quietRow)),
+    block(ui, t.settings.blockDays, weekRow, pauseRow),
     cadenceFoot,
   );
 
@@ -738,17 +750,21 @@ function mountSettings(ctx: ConsolePanelContext): void {
     fieldRow(ui, t.settings.rowsPerJournal, rowsInput),
     fieldRow(ui, t.settings.journalDelayDays, delayInput),
   );
-  const sourcesSave = ui.button(t.settings.saveSection, { variant: 'primary', size: 'sm', onClick: () => void saveCard('sources') });
+  const sourcesSave = ui.button(t.settings.saveSectionOf(t.settings.groupSources), { variant: 'primary', size: 'sm', onClick: () => void saveCard('sources') });
   const sourcesFoot = ui.rowbar();
   sourcesFoot.append(sourcesSave);
   sources.body.append(
-    fieldRow(ui, t.settings.keywords, ui.h('div')),
-    keywordsEditor.el,
-    fieldRow(ui, t.settings.arxivCats, ui.h('div')),
-    catsEditor.el,
-    sourceNumbers,
-    fieldRow(ui, t.settings.mailto, mailtoInput),
-    fieldRow(ui, t.settings.downloadDir, dirBar),
+    block(
+      ui,
+      t.settings.blockInterest,
+      fieldRow(ui, t.settings.keywords, ui.h('div')),
+      keywordsEditor.el,
+      fieldRow(ui, t.settings.arxivCats, ui.h('div')),
+      catsEditor.el,
+    ),
+    block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoInput)),
+    block(ui, t.settings.blockAbstract, abstractBox.el, ui.msgline(t.settings.abstractHint)),
+    block(ui, t.settings.blockDownload, fieldRow(ui, t.settings.downloadDir, dirBar)),
     sourcesFoot,
   );
 
@@ -772,21 +788,22 @@ function mountSettings(ctx: ConsolePanelContext): void {
     issn.value = init?.issn ?? '';
     tier.value = init?.tier ?? '';
     group.value = init?.group ?? '';
-    const del = ui.button(t.settings.remove, {
+    const del = ui.button('×', {
       size: 'sm',
-      variant: 'danger',
       onClick: () => {
         el.remove();
         const at = journalRows.findIndex((r) => r.el === el);
         if (at >= 0) journalRows.splice(at, 1);
       },
     });
+    del.classList.add('ip-del');
+    del.title = t.settings.remove;
     el.append(label, issn, tier, group, del);
     journalRowsHost.appendChild(el);
     journalRows.push({ label, issn, tier, group, el });
   };
   const journalFoot = ui.rowbar();
-  const journalsSave = ui.button(t.settings.saveSection, { variant: 'primary', size: 'sm', onClick: () => void saveCard('journals') });
+  const journalsSave = ui.button(t.settings.saveSectionOf(t.settings.journals), { variant: 'primary', size: 'sm', onClick: () => void saveCard('journals') });
   journalFoot.append(ui.button(t.settings.addJournal, { size: 'sm', onClick: () => addJournalRow() }), journalsSave);
   journals.body.append(journalGrid, ui.msgline(t.settings.journalNote), journalFoot);
 
@@ -806,21 +823,22 @@ function mountSettings(ctx: ConsolePanelContext): void {
     const zh = ui.input({ placeholder: '轴承' });
     en.value = init?.en ?? '';
     zh.value = init?.zh ?? '';
-    const del = ui.button(t.settings.remove, {
+    const del = ui.button('×', {
       size: 'sm',
-      variant: 'danger',
       onClick: () => {
         el.remove();
         const at = termRows.findIndex((r) => r.el === el);
         if (at >= 0) termRows.splice(at, 1);
       },
     });
+    del.classList.add('ip-del');
+    del.title = t.settings.remove;
     el.append(en, zh, del);
     termRowsHost.appendChild(el);
     termRows.push({ en, zh, el });
   };
   const termFoot = ui.rowbar();
-  const glossarySave = ui.button(t.settings.saveSection, { variant: 'primary', size: 'sm', onClick: () => void saveCard('glossary') });
+  const glossarySave = ui.button(t.settings.saveSectionOf(t.settings.glossary), { variant: 'primary', size: 'sm', onClick: () => void saveCard('glossary') });
   termFoot.append(ui.button(t.settings.addTerm, { size: 'sm', onClick: () => addTermRow() }), glossarySave);
   glossary.body.append(termGrid, termFoot);
 
@@ -961,6 +979,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
 function mountRecords(ctx: ConsolePanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
+  ctx.root.classList.add('ip-shell');
   let view: InterestPushView | null = null;
   let busy: { dispose(): void } | null = null;
 

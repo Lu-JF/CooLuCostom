@@ -86,6 +86,14 @@ export interface InterestText {
     pushNow: string;
     checking: string;
     groupPush: string;
+    blockFrequency: string;
+    blockWindows: string;
+    blockDays: string;
+    blockInterest: string;
+    blockWindow: string;
+    blockAbstract: string;
+    blockDownload: string;
+    abstractHint: string;
     groupSources: string;
     groupTranslate: string;
     checkMinutes: string;
@@ -115,6 +123,7 @@ export interface InterestText {
     quietStart: string;
     quietEnd: string;
     saveSection: string;
+    saveSectionOf: (name: string) => string;
     savedSection: (name: string) => string;
     savedSectionAdjusted: (name: string) => string;
     saveSectionFailed: (name: string) => string;
@@ -186,7 +195,7 @@ const zh: InterestText = {
     stars: (total) => `${total}/10`,
     noAbstractFromSource: '源未提供摘要，可点「打开原文」到出版社页面查看。',
     titleOnlyTranslation: '本条无摘要，译文只有标题。',
-    notTranslated: '尚未翻译，点上面的「翻译摘要」。',
+    notTranslated: '尚未翻译，点上面的「翻译」。',
     record: '收进兴趣记录',
     recorded: '已在兴趣记录里',
     refresh: '刷新',
@@ -199,7 +208,7 @@ const zh: InterestText = {
     source: '爬取源',
     abstract: '原文摘要',
     translation: '中文译文',
-    translate: '翻译摘要',
+    translate: '翻译',
     retranslate: '重新翻译',
     translating: '翻译中…',
     translateOk: '翻译成功',
@@ -223,6 +232,14 @@ const zh: InterestText = {
     pushNow: '立刻推一条（试）',
     checking: '正在检查…',
     groupPush: '推送节奏',
+    blockFrequency: '频率与上限',
+    blockWindows: '时段',
+    blockDays: '星期与暂停',
+    blockInterest: '研究兴趣',
+    blockWindow: '抓取窗口',
+    blockAbstract: '摘要策略',
+    blockDownload: '下载',
+    abstractHint: '没有摘要的条目不推送，先留在列表里等回补，每天重试一次。',
     groupSources: '数据源',
     groupTranslate: '翻译',
     checkMinutes: '检查间隔（分钟）',
@@ -231,7 +248,7 @@ const zh: InterestText = {
     quiet: '静默时段',
     pushDays: '允许推送的星期（1=周一…7=周日）',
     maxRounds: '气泡对话轮次上限',
-    pausedUntil: '暂停到（时间戳毫秒，0 为不暂停）',
+    pausedUntil: '暂停到',
     resumNow: '取消暂停',
     clearPause: '清空',
     keywords: '研究领域关键词',
@@ -239,9 +256,9 @@ const zh: InterestText = {
     arxivCats: 'arXiv 分类',
     windowDays: '只看最近多少天',
     rowsPerJournal: '每刊每次取多少条',
-    journalDelayDays: '期刊只抓 N 天前发表的（等摘要长出来）',
-    mailto: 'Crossref 邮箱（polite pool）',
-    downloadDir: '下载目录（空 = 数据目录下 news/papers）',
+    journalDelayDays: '期刊延迟天数',
+    mailto: 'Crossref 邮箱',
+    downloadDir: '下载目录',
     requireAbstract: '只推送有摘要的条目（推荐）',
     glossary: '翻译术语表',
     addJournal: '增加一行',
@@ -253,6 +270,7 @@ const zh: InterestText = {
     quietStart: '静默起',
     quietEnd: '静默止',
     saveSection: '保存本组',
+    saveSectionOf: (name) => `保存${name}`,
     savedSection: (name) => `${name}已保存`,
     savedSectionAdjusted: (name) => `${name}已保存，个别数值按合法范围调整`,
     saveSectionFailed: (name) => `${name}未生效，请重试`,
@@ -365,6 +383,14 @@ const en: InterestText = {
     pushNow: 'Push one now (test)',
     checking: 'Checking…',
     groupPush: 'Cadence',
+    blockFrequency: 'Frequency and caps',
+    blockWindows: 'Time windows',
+    blockDays: 'Days and pause',
+    blockInterest: 'Research interests',
+    blockWindow: 'Crawl window',
+    blockAbstract: 'Abstracts',
+    blockDownload: 'Download',
+    abstractHint: 'Items without an abstract are not pushed; they stay in the list and are retried daily.',
     groupSources: 'Sources',
     groupTranslate: 'Translation',
     checkMinutes: 'Check interval (minutes)',
@@ -373,7 +399,7 @@ const en: InterestText = {
     quiet: 'Quiet hours',
     pushDays: 'Allowed weekdays (1=Mon…7=Sun)',
     maxRounds: 'Max bubble rounds',
-    pausedUntil: 'Paused until (epoch ms, 0 = off)',
+    pausedUntil: 'Paused until',
     resumNow: 'Resume now',
     clearPause: 'Clear',
     keywords: 'Research keywords',
@@ -381,9 +407,9 @@ const en: InterestText = {
     arxivCats: 'arXiv categories',
     windowDays: 'Only last N days',
     rowsPerJournal: 'Rows per journal',
-    journalDelayDays: 'Skip journal articles newer than N days (let abstracts appear)',
-    mailto: 'Crossref mailto (polite pool)',
-    downloadDir: 'Download dir (empty = <dataDir>/news/papers)',
+    journalDelayDays: 'Journal delay (days)',
+    mailto: 'Crossref mailto',
+    downloadDir: 'Download dir',
     requireAbstract: 'Only push items that have an abstract',
     glossary: 'Translation glossary',
     addJournal: 'Add row',
@@ -395,6 +421,7 @@ const en: InterestText = {
     quietStart: 'Quiet from',
     quietEnd: 'Quiet to',
     saveSection: 'Save',
+    saveSectionOf: (name) => `Save ${name}`,
     savedSection: (name) => `${name} saved`,
     savedSectionAdjusted: (name) => `${name} saved with some values clamped`,
     saveSectionFailed: (name) => `${name} did not take effect, retry`,

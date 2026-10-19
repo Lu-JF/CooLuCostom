@@ -297,6 +297,22 @@ Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定�
 `askModel()` 现在对**网络类错误**（`fetch failed` / socket / ECONNRESET / ETIMEDOUT）重试一次、间隔 800ms；
 HTTP 4xx/5xx 不重试（重试也白搭）。单测钉住了「重试一次就够」。
 
+### 样式与保存（这一轮）
+
+- **grid 轨道会被长标签撑开**：字段行用 `grid-template-columns: 132px minmax(0,1fr)` 时，
+  grid 项的 `min-width: auto` 让超长标签把第一列撑到 200px，整页控件就歪了。给标签补
+  `width: 132px; min-width: 0; overflow-wrap: anywhere` 才稳。渲染检查里用「标签等宽、不压控件」断言钉住。
+- **四个同名「保存本组」= 不知道保存哪一组**：改成 `保存推送节奏 / 保存数据源 / 保存期刊 / 保存术语`。
+  渲染脚本相应改成统计 `/^保存/` 的按钮。
+- **静默时段不能排序**：`saveSettings` 里原来复用「时刻表」的解析（去重 + 升序），把跨夜的
+  `22:30 → 08:30` 存成 `08:30 → 22:30`，等于整天静默、所有定时推送都被堵死。静默起止要**保序**，
+  单独写 `quietPair()`。这个 bug 是看截图时“静默时段和推送时刻冲突”才发现的，单测里补了两条。
+- **部分字段的 payload 不能清空名单**：`saveSettings` 原来对缺省的数组当空数组处理，只用 `{quiet}` 调一次
+  就把 28 家期刊、6 个关键词、46 条术语全清了。现在缺键 = 保持原值，显式传 `[]` 才清空。
+  （教训：手工 curl 这条 API 时也要传全量。）
+- **手动试推不计入「今日推送」**：试推原来是 `pushedToday += 1`，上限 2 条时读数长成 `21/2`。
+  现在 `pushItem(item, key, countToday=false)`，试推只记 `pushedIds`（避免重复推），不占配额。
+
 ### 模块级常量的浅拷贝（有真 bug）
 
 `{ ...EMPTY_STATE }` 只复制了顶层：`dismissed` / `read` / `pushedIds` / `conditional` / `abstractTried`

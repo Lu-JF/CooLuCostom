@@ -488,6 +488,53 @@ describe('陈旧条目的清理', () => {
   });
 });
 
+describe('部分字段保存不清空名单', () => {
+  it('只提交 quiet 时，期刊、关键词、术语表都保持原样', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    const before = world.view('zh').config;
+    expect(before.journals.length).toBeGreaterThan(0);
+    expect(before.glossary.length).toBeGreaterThan(0);
+    await world.invoke('settings', 'saveSettings', [{ quiet: ['21:00', '07:00'] }], 'zh');
+    const after = world.view('zh').config;
+    expect(after.quiet).toEqual(['21:00', '07:00']);
+    expect(after.journals.length).toBe(before.journals.length);
+    expect(after.keywords).toEqual(before.keywords);
+    expect(after.glossary).toEqual(before.glossary);
+  });
+
+  it('显式传空数组才会清空（使用者真要清空时）', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    await world.invoke('settings', 'saveSettings', [{ keywords: [] }], 'zh');
+    expect(world.view('zh').config.keywords).toEqual([]);
+  });
+});
+
+describe('静默时段保序', () => {
+  it('跨夜时段 22:30 → 08:30 保存后不会被排成 08:30 → 22:30', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    await world.invoke('settings', 'saveSettings', [{ quiet: ['22:30', '08:30'] }], 'zh');
+    expect(world.view('zh').config.quiet).toEqual(['22:30', '08:30']);
+    // 反过来写也照原样保留（使用者可能就想设白天静默）
+    await world.invoke('settings', 'saveSettings', [{ quiet: ['09:00', '17:00'] }], 'zh');
+    expect(world.view('zh').config.quiet).toEqual(['09:00', '17:00']);
+  });
+});
+
+describe('试推不计入今日次数', () => {
+  it('「立刻推一条」不发消息也照样推，但不把今日计数顶上去', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    expect(world.view('zh').schedule.pushedToday).toBe(0);
+    await world.invoke('settings', 'pushNow', [], 'zh');
+    const view = world.view('zh');
+    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
+    expect(view.schedule.pushedToday).toBe(0);
+  });
+});
+
 describe('大肥鱼速评', () => {
   it('推送页与列表共用同一份速评，第二次不再花 token', async () => {
     const { world, host, log } = makeWorld();
