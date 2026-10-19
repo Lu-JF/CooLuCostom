@@ -209,5 +209,40 @@ check(
   `带分区标签 ${(ipView?.config?.journals ?? []).filter((j) => /中科院一区|Q1/.test(j.tier ?? '')).length} 家`,
 );
 
+// 「立刻推一条」必须与「推送」页签同步：先读页面上那篇，再推，再核对事件正文里的标题。
+const norm = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const sameTitle = (eventLine, title) => {
+  const got = norm(String(eventLine ?? '').replace(/^标题：/, ''));
+  const want = norm(title);
+  return got !== '' && want !== '' && (got === want || want.startsWith(got.slice(0, 40)));
+};
+if (withAlerts) {
+  const detail = await post(`${panelBase}/world%3Ainterest-push/panels/detail/state`, { args: [] });
+  const active = detail.json?.view?.active ?? null;
+  if (!active) {
+    check('「立刻推一条」与推送页签同步', false, '推送页没有当前论文');
+  } else {
+    const startedAt = Date.now() - 5_000;
+    await post(`${panelBase}/world%3Ainterest-push/panels/settings/pushNow`, { args: [] });
+    let pushed = null;
+    for (let i = 0; i < 10 && pushed === null; i += 1) {
+      await new Promise((r) => setTimeout(r, 500));
+      const events = await get('/api/events');
+      pushed =
+        (events.json?.events ?? [])
+          .filter((e) => e.type === 'news.item' && Date.parse(String(e.ts)) >= startedAt)
+          .reverse()[0] ?? null;
+    }
+    const head = (pushed?.text ?? '').split('\n').find((l) => l.startsWith('标题：')) ?? '';
+    check(
+      '「立刻推一条」推送的就是推送页当前那篇',
+      sameTitle(head, active.title),
+      pushed ? `${head.slice(0, 36)} ⇄ ${String(active.title).slice(0, 36)}` : '没有收到 news.item 事件',
+    );
+    const second = (pushed?.text ?? '').split('\n')[1] ?? '';
+    check('推送正文第二行是速评与分数', /^速评（大肥鱼，[\d.]+\/10）：/.test(second) || second.startsWith('速评：'), second.slice(0, 40));
+  }
+}
+
 console.log(`\n${failed === 0 ? '全部通过' : `${failed} 项没过`}（共 ${total} 项）`);
 process.exit(failed === 0 ? 0 : 1);

@@ -155,13 +155,22 @@ try {
       const b = [...document.querySelectorAll('button')].find((x) => (x.textContent ?? '').trim() === '让大肥鱼评一下');
       b?.click();
     });
-    await new Promise((r) => setTimeout(r, 900));
-    const during = await page.evaluate(() => ({
-      modal: Boolean(document.querySelector('.modal.busy')),
-      status: [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()),
-    }));
+    // 转圈是一瞬的：轮询一小会儿，看到「正在看」或已经出星星都算（模型快的时候可能已经评完）。
+    const during = await page.evaluate(async () => {
+      const t0 = Date.now();
+      let sawStatus = false;
+      let sawModal = false;
+      while (Date.now() - t0 < 4000) {
+        if (document.querySelector('.modal.busy')) sawModal = true;
+        const txt = [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()).filter(Boolean);
+        if (txt.some((t) => t.includes('正在看'))) sawStatus = true;
+        if (document.querySelectorAll('.ip-star-on').length > 0) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return { modal: sawModal, status: sawStatus };
+    });
     check('速评时不弹整页遮罩（页面不卡）', during.modal === false, during.modal ? '出现了 .modal.busy' : '');
-    check('速评时按钮旁有状态（转圈 / 正在看）', during.status.some((t) => t.includes('正在看')), during.status.join(' | '));
+    check('速评时按钮旁有状态（转圈 / 正在看）或已出分', during.status === true, during.status ? '' : '没看到「正在看」');
     await page.waitForFunction(() => document.querySelectorAll('.ip-star-on').length >= 1, null, { timeout: 120_000 }).catch(() => {});
     const after = await page.evaluate(() => ({
       stars: document.querySelectorAll('.ip-review .ip-star').length + document.querySelectorAll('.ip-stars .ip-star').length,
@@ -179,13 +188,21 @@ try {
     const b = [...document.querySelectorAll('button')].find((x) => /翻译/.test((x.textContent ?? '').trim()));
     b?.click();
   });
-  await new Promise((r) => setTimeout(r, 900));
-  const duringTr = await page.evaluate(() => ({
-    modal: Boolean(document.querySelector('.modal.busy')),
-    status: [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()),
-  }));
+  const duringTr = await page.evaluate(async () => {
+    const t0 = Date.now();
+    let sawModal = false;
+    let sawStatus = false;
+    while (Date.now() - t0 < 5000) {
+      if (document.querySelector('.modal.busy')) sawModal = true;
+      const txt = [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()).filter(Boolean);
+      if (txt.some((t) => t.includes('翻译中') || t.includes('翻译成功'))) sawStatus = true;
+      if (txt.some((t) => t.includes('翻译成功'))) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return { modal: sawModal, status: sawStatus };
+  });
   check('翻译时不弹整页遮罩（页面不卡）', duringTr.modal === false, duringTr.modal ? '出现了 .modal.busy' : '');
-  check('翻译时按钮旁有「翻译中…」或已有结果', duringTr.status.some((t) => t.includes('翻译中') || t.includes('翻译成功')), duringTr.status.join(' | '));
+  check('翻译时按钮旁有「翻译中…」或已有结果', duringTr.status === true, duringTr.status ? '' : '没看到翻译状态');
   await page
     .waitForFunction(() => [...document.querySelectorAll('.ip-status')].some((e) => (e.textContent ?? '').includes('翻译成功')), null, { timeout: 180_000 })
     .catch(() => {});

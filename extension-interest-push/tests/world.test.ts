@@ -141,15 +141,18 @@ describe('推送与回执', () => {
     expect(pushed[0]!.trigger).toBe('flush');
   });
 
-  it('再点一次不会把同一条推第二遍', async () => {
+  it('点两次「立刻推一条」都推页面上那一篇（手动按钮以页面为准）', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
+    const active = world.view('zh').active!.id;
     await world.invoke('settings', 'pushNow', [], 'zh');
     await world.invoke('settings', 'pushNow', [], 'zh');
-    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
+    const pushed = host.pushed.filter((e) => e.type === 'news.item');
+    expect(pushed).toHaveLength(2);
+    expect(pushed.every((e) => e.senderKey === active)).toBe(true);
   });
 
-  it('推送时优先挑有摘要的那条', async () => {
+  it('手动推送不挑条目：页面上是哪篇就推哪篇，没摘要也照推', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-pref-'));
     const botDir = makeBotDir();
     const log = { crossref: 0, model: 0 };
@@ -182,7 +185,9 @@ describe('推送与回执', () => {
     expect(world.view('zh').items).toHaveLength(2);
     await world.invoke('settings', 'pushNow', [], 'zh');
     const text = host.pushed.filter((e) => e.type === 'news.item')[0]?.text ?? '';
-    expect(text).toContain('DOI：10.1016/with-abstract');
+    // 最新那条（没有摘要）就是页面上显示的那条：手动推送照它推，不去挑「有摘要的」。
+    expect(world.view('zh').active?.doi).toBe('10.1016/no-abstract');
+    expect(text).toContain('DOI：10.1016/no-abstract');
     expect(log.crossref).toBe(0);
   });
 
@@ -228,15 +233,18 @@ describe('推送与回执', () => {
     expect(afterSecond.active?.id).toBe(rows[0]!.id);
   });
 
-  it('收到「不感兴趣」的回执后，这条不再被推送', async () => {
+  it('「不感兴趣」的回执会记下，自动推送不再挑它；手动按钮仍以页面为准', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     await world.invoke('settings', 'pushNow', [], 'zh');
     // 真实回执长这样（实测）：[answer] Veil回答「这篇要细说吗?」:选了第 3 项「跳过」
     host.seed({ type: 'desktop-pet.answer', text: '[answer] Veil回答「这篇要细说吗?」:选了第 3 项「跳过」' });
     await world.invoke('settings', 'checkNow', [], 'zh');
+    // 回执被认领：这条至少标成已读（自动挑条的规则见 pick.test.ts，跳过 dismissed 的那条在那里钉住）。
+    expect(world.view('zh').items[0]!.unread).toBe(false);
+    // 手动按钮不看这些：页面上还是这篇，按下去就推这篇。
     await world.invoke('settings', 'pushNow', [], 'zh');
-    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
+    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(2);
     expect(world.view('zh').items).toHaveLength(1);
   });
 });
@@ -301,7 +309,7 @@ describe('兴趣记录', () => {
 });
 
 describe('只推有摘要的条目', () => {
-  it('名单里只有无摘要的条目时，一个都不推', async () => {
+  it('名单里只有无摘要的条目：自动挑条不推它（规则见 pick.test），手动按钮照页面推', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-noabs-'));
     const botDir = makeBotDir();
     const noAbstract = { ...CROSSREF_ITEM, DOI: '10.1016/no-abstract-only', abstract: '' };
@@ -324,7 +332,9 @@ describe('只推有摘要的条目', () => {
     await world.start(host.asHost());
     expect(world.view('zh').items).toHaveLength(1);
     await world.invoke('settings', 'pushNow', [], 'zh');
-    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(0);
+    const pushed = host.pushed.filter((e) => e.type === 'news.item');
+    expect(pushed).toHaveLength(1);
+    expect(pushed[0]!.text).toContain('源未给摘要');
   });
 });
 

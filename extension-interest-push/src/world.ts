@@ -20,6 +20,7 @@ import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
+import { pickPushCandidate } from './pick.ts';
 import { readReview, reviewItem } from './review.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
@@ -442,19 +443,12 @@ export class InterestPushWorld implements World {
    * （源没给就等下一轮，摘要往往过几天才补上）。把 requireAbstract 关掉才允许退而推最新的那条。
    */
   private pickPushItem(): NewsItem | null {
-    const skip = new Set([...this.state.pushedIds, ...this.state.dismissed, ...this.state.read]);
-    const pool = this.items.filter((i) => !skip.has(i.id));
-    const withAbstract = pool.find((i) => i.abstract.trim() !== '');
-    if (withAbstract !== undefined) return withAbstract;
-    return this.opts.cfg.requireAbstract ? null : (pool[0] ?? null);
-  }
-
-  /** 这条现在能不能推：有摘要（按设置）、没被判「不感兴趣」、没推过。 */
-  private pushable(item: NewsItem): boolean {
-    if (this.state.dismissed.includes(item.id)) return false;
-    if (this.state.pushedIds.includes(item.id)) return false;
-    if (this.opts.cfg.requireAbstract && item.abstract.trim() === '') return false;
-    return true;
+    return pickPushCandidate(this.items, {
+      read: this.state.read,
+      pushedIds: this.state.pushedIds,
+      dismissed: this.state.dismissed,
+      requireAbstract: this.opts.cfg.requireAbstract,
+    });
   }
 
   /** 列表里用的速评缩略：总分 + 评语（没有就是 null）。 */
@@ -594,15 +588,12 @@ export class InterestPushWorld implements World {
         return { ok: true, reason: state.cached ? 'cached' : null, view: this.view(language) };
       }
       if (method === 'pushNow') {
-        // 推送页显示哪篇就推哪篇：两个页签必须一致。这条自己还推不了（没摘要 / 已判不感兴趣 / 已推过）时
-        // 退回原来的「挑一条能推的」，免得按了没反应。
+        // 推送页显示哪篇就推哪篇——这是使用者的要求：两个页签必须同步。
+        // 已经推过的、没摘要的、判过「不感兴趣」的，都照推：这是手动按钮，以页面显示为准。
         const item = this.activeItem();
-        if (item !== null && this.pushable(item)) {
-          await this.pushItem(item, null);
-          this.saveState();
-          return { ok: true, reason: null, view: this.view(language) };
-        }
-        await this.run('force');
+        if (item === null) return { ok: false, reason: t.errors.noActive, view: this.view(language) };
+        await this.pushItem(item, null);
+        this.saveState();
         return { ok: true, reason: null, view: this.view(language) };
       }
       if (panel === 'list') {
