@@ -47,7 +47,7 @@ export interface ModelResult {
   reason: string | null;
 }
 
-/** 一次非流式调用。失败不抛错，返回 ok=false 与原因。 */
+/** 一次非流式调用。失败不抛错，返回 ok=false 与原因。网络类错误自动重试一次。 */
 export async function askModel(
   endpoint: ModelEndpoint,
   prompt: string,
@@ -55,24 +55,31 @@ export async function askModel(
 ): Promise<ModelResult> {
   if (!endpoint.baseUrl || !endpoint.apiKey) return { ok: false, text: '', reason: 'no-endpoint' };
   const doFetch = fetchImpl ?? fetch;
-  try {
-    const res = await doFetch(`${endpoint.baseUrl.replace(/\/$/, '')}/responses`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${endpoint.apiKey}` },
-      body: JSON.stringify({
-        model: endpoint.model,
-        input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
-        stream: false,
-      }),
-    });
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      return { ok: false, text: '', reason: `http ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}` };
+  const once = async (): Promise<ModelResult> => {
+    try {
+      const res = await doFetch(`${endpoint.baseUrl.replace(/\/$/, '')}/responses`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${endpoint.apiKey}` },
+        body: JSON.stringify({
+          model: endpoint.model,
+          input: [{ role: 'user', content: [{ type: 'input_text', text: prompt }] }],
+          stream: false,
+        }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        return { ok: false, text: '', reason: `http ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ''}` };
+      }
+      const text = extractText(await res.json());
+      if (text === '') return { ok: false, text: '', reason: 'empty-response' };
+      return { ok: true, text, reason: null };
+    } catch (err) {
+      return { ok: false, text: '', reason: String((err as Error)?.message ?? err) };
     }
-    const text = extractText(await res.json());
-    if (text === '') return { ok: false, text: '', reason: 'empty-response' };
-    return { ok: true, text, reason: null };
-  } catch (err) {
-    return { ok: false, text: '', reason: String((err as Error)?.message ?? err) };
-  }
+  };
+  const first = await once();
+  // 端点偶尔 `fetch failed`（连接被对端掐断，实测过一次）：这种网络错重试一次，别让气泡少了速评。
+  if (first.ok || !/fetch failed|socket|ECONNRESET|ETIMEDOUT/i.test(first.reason ?? '')) return first;
+  await new Promise((r) => setTimeout(r, 800));
+  return await once();
 }

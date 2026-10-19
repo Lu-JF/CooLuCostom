@@ -135,7 +135,7 @@ export interface InterestText {
     invalid: string;
     clearPause: string;
   };
-  errors: { unknownMethod: (m: string) => string; noActive: string; noEndpoint: string };
+  errors: { unknownMethod: (m: string) => string; noActive: string; noEndpoint: string; nothingToPush: string };
 }
 
 const zh: InterestText = {
@@ -272,7 +272,12 @@ const zh: InterestText = {
     perLine: '每行一条',
     invalid: '有字段不合法，已按合法范围夹紧后再保存。',
   },
-  errors: { unknownMethod: (m) => `未实现的方法 ${m}`, noActive: '没有选中的条目', noEndpoint: '找不到可用的模型端点' },
+  errors: {
+    unknownMethod: (m) => `未实现的方法 ${m}`,
+    noActive: '没有选中的条目',
+    noEndpoint: '找不到可用的模型端点',
+    nothingToPush: '没有可推的条目了（都推过、或都没摘要）',
+  },
 };
 
 const en: InterestText = {
@@ -409,7 +414,12 @@ const en: InterestText = {
     perLine: 'one per line',
     invalid: 'Some fields were out of range and got clamped before saving.',
   },
-  errors: { unknownMethod: (m) => `method ${m} is not implemented`, noActive: 'no active item', noEndpoint: 'no usable model endpoint' },
+  errors: {
+    unknownMethod: (m) => `method ${m} is not implemented`,
+    noActive: 'no active item',
+    noEndpoint: 'no usable model endpoint',
+    nothingToPush: 'nothing left to push (all pushed, or none has an abstract)',
+  },
 };
 
 export function interestText(language: Language): InterestText {

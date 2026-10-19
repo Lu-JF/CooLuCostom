@@ -20,7 +20,7 @@ import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
-import { pickPushCandidate } from './pick.ts';
+import { pickManualCandidate, pickPushCandidate, type PickOptions } from './pick.ts';
 import { readReview, reviewItem } from './review.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
@@ -442,13 +442,17 @@ export class InterestPushWorld implements World {
    * 挑一条推送。默认只推有摘要的：气泡要讲得出内容，只有标题的推送等于白推
    * （源没给就等下一轮，摘要往往过几天才补上）。把 requireAbstract 关掉才允许退而推最新的那条。
    */
-  private pickPushItem(): NewsItem | null {
-    return pickPushCandidate(this.items, {
+  private pickOptions(): PickOptions {
+    return {
       read: this.state.read,
       pushedIds: this.state.pushedIds,
       dismissed: this.state.dismissed,
       requireAbstract: this.opts.cfg.requireAbstract,
-    });
+    };
+  }
+
+  private pickPushItem(): NewsItem | null {
+    return pickPushCandidate(this.items, this.pickOptions());
   }
 
   /** 列表里用的速评缩略：总分 + 评语（没有就是 null）。 */
@@ -513,6 +517,8 @@ export class InterestPushWorld implements World {
     this.state.pushedToday += 1;
     this.state.lastPushAt = this.now();
     this.state.lastWindowKey = windowKey ?? this.state.lastWindowKey;
+    // 页签跟到刚推的这篇：「推送」页看到的就是气泡刚讲的那一篇，两处永远一致。
+    this.activeId = item.id;
     this.log(`已推送 ${item.id}：${item.title.slice(0, 40)}`);
   }
 
@@ -588,11 +594,13 @@ export class InterestPushWorld implements World {
         return { ok: true, reason: state.cached ? 'cached' : null, view: this.view(language) };
       }
       if (method === 'pushNow') {
-        // 推送页显示哪篇就推哪篇——这是使用者的要求：两个页签必须同步。
-        // 已经推过的、没摘要的、判过「不感兴趣」的，都照推：这是手动按钮，以页面显示为准。
-        const item = this.activeItem();
-        if (item === null) return { ok: false, reason: t.errors.noActive, view: this.view(language) };
-        await this.pushItem(item, null);
+        // 页面上哪篇能推就推哪篇；它推不了（已推过 / 没摘要 / 判过不感兴趣）就换下一篇能推的。
+        // 推完 activeId 跟到那篇（见 pushItem），于是「推送」页签永远显示刚刚气泡讲的那一篇。
+        const target = pickManualCandidate(this.items, this.activeItem(), this.pickOptions());
+        if (target === null) {
+          return { ok: false, reason: t.errors.nothingToPush, view: this.view(language) };
+        }
+        await this.pushItem(target, null);
         this.saveState();
         return { ok: true, reason: null, view: this.view(language) };
       }

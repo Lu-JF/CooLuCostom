@@ -141,18 +141,38 @@ describe('推送与回执', () => {
     expect(pushed[0]!.trigger).toBe('flush');
   });
 
-  it('点两次「立刻推一条」都推页面上那一篇（手动按钮以页面为准）', async () => {
-    const { world, host } = makeWorld();
+  it('推完页签跟到刚推那篇；再点一次换下一篇，不连着推同一篇', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-follow-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const base = {
+      doi: null, authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
+      sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract about bearings.',
+    };
+    const newest = { ...base, id: 'aaaa0001', title: 'Newest paper', issued: '2026-10-18' };
+    const older = { ...base, id: 'bbbb0002', title: 'Older paper', issued: '2026-10-02' };
+    writeFileSync(join(dataDir, 'news', 'items.json'), JSON.stringify([newest, older]));
+
+    const { world, host } = makeWorld({ dataDir });
     await world.start(host.asHost());
-    const active = world.view('zh').active!.id;
+    expect(world.view('zh').active?.id).toBe('aaaa0001');
+
+    // 第一次：推页面上那篇，推完页签还是它（气泡讲的就是它）。
     await world.invoke('settings', 'pushNow', [], 'zh');
+    let pushed = host.pushed.filter((e) => e.type === 'news.item');
+    expect(pushed).toHaveLength(1);
+    expect(pushed[0]!.senderKey).toBe('aaaa0001');
+    expect(world.view('zh').active?.id).toBe('aaaa0001');
+
+    // 第二次：这篇刚推过，换下一篇能推的；页签跟到新的那篇。
     await world.invoke('settings', 'pushNow', [], 'zh');
-    const pushed = host.pushed.filter((e) => e.type === 'news.item');
+    pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(2);
-    expect(pushed.every((e) => e.senderKey === active)).toBe(true);
+    expect(pushed[1]!.senderKey).toBe('bbbb0002');
+    expect(world.view('zh').active?.id).toBe('bbbb0002');
   });
 
-  it('手动推送不挑条目：页面上是哪篇就推哪篇，没摘要也照推', async () => {
+  it('页面上那篇没摘要时换下一篇能推的，页签跟过去', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-pref-'));
     const botDir = makeBotDir();
     const log = { crossref: 0, model: 0 };
@@ -185,9 +205,9 @@ describe('推送与回执', () => {
     expect(world.view('zh').items).toHaveLength(2);
     await world.invoke('settings', 'pushNow', [], 'zh');
     const text = host.pushed.filter((e) => e.type === 'news.item')[0]?.text ?? '';
-    // 最新那条（没有摘要）就是页面上显示的那条：手动推送照它推，不去挑「有摘要的」。
-    expect(world.view('zh').active?.doi).toBe('10.1016/no-abstract');
-    expect(text).toContain('DOI：10.1016/no-abstract');
+    // 页面上那篇是最新的（没有摘要），推不了：换下一篇有摘要的，页签跟过去。
+    expect(world.view('zh').active?.doi).toBe('10.1016/with-abstract');
+    expect(text).toContain('DOI：10.1016/with-abstract');
     expect(log.crossref).toBe(0);
   });
 
@@ -242,9 +262,10 @@ describe('推送与回执', () => {
     await world.invoke('settings', 'checkNow', [], 'zh');
     // 回执被认领：这条至少标成已读（自动挑条的规则见 pick.test.ts，跳过 dismissed 的那条在那里钉住）。
     expect(world.view('zh').items[0]!.unread).toBe(false);
-    // 手动按钮不看这些：页面上还是这篇，按下去就推这篇。
-    await world.invoke('settings', 'pushNow', [], 'zh');
-    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(2);
+    // 名单里只剩这一条且被判不感兴趣：手动推也换不出别的，明说没有可推的。
+    const out = (await world.invoke('settings', 'pushNow', [], 'zh')) as { ok: boolean; reason: string | null };
+    expect(out.ok).toBe(false);
+    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
     expect(world.view('zh').items).toHaveLength(1);
   });
 });
@@ -309,7 +330,7 @@ describe('兴趣记录', () => {
 });
 
 describe('只推有摘要的条目', () => {
-  it('名单里只有无摘要的条目：自动挑条不推它（规则见 pick.test），手动按钮照页面推', async () => {
+  it('名单里只有无摘要的条目：没有可推的就明说，不硬推一篇没内容的', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-noabs-'));
     const botDir = makeBotDir();
     const noAbstract = { ...CROSSREF_ITEM, DOI: '10.1016/no-abstract-only', abstract: '' };
@@ -331,10 +352,10 @@ describe('只推有摘要的条目', () => {
     const host = new FakeHost();
     await world.start(host.asHost());
     expect(world.view('zh').items).toHaveLength(1);
-    await world.invoke('settings', 'pushNow', [], 'zh');
-    const pushed = host.pushed.filter((e) => e.type === 'news.item');
-    expect(pushed).toHaveLength(1);
-    expect(pushed[0]!.text).toContain('源未给摘要');
+    const out = (await world.invoke('settings', 'pushNow', [], 'zh')) as { ok: boolean; reason: string | null };
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain('没有可推的条目');
+    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(0);
   });
 });
 
