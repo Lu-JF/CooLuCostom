@@ -74,13 +74,15 @@ const EMPTY_STATE: PersistedState = {
 };
 
 /** 不认识的回执里出现这些词，就算「不感兴趣」。 */
-const DISMISS_WORDS = /不感兴趣|不用|不了|不用了|结束|算了|先不看|够了|no thanks|not interested|stop/i;
+const DISMISS_WORDS = /不感兴趣|不用|不了|不用了|不需要|结束|算了|先不看|不看了|不看|跳过|略过|够了|存过了|no thanks|not interested|skip|stop/i;
 
 export class InterestPushWorld implements World {
   readonly id = 'interest-push';
 
   private host: WorldHost | null = null;
   private checkTimer: ReturnType<typeof setInterval> | null = null;
+  /** 回执扫描：只读事件库，不发网络请求，所以可以跑得比检查密得多。 */
+  private answerTimer: ReturnType<typeof setInterval> | null = null;
   private pushTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly seen: SeenStore;
   private state: PersistedState;
@@ -99,7 +101,8 @@ export class InterestPushWorld implements World {
   // ---------------------------------------------------------------- World
 
   envPromptVars(): Record<string, string> {
-    return { 'interest-push.status': this.statusText() };
+    // 占位符名不用连字符：模板渲染只认 [\w.] 一类的名字，带连字符的会被原样留下。
+    return { 'interestpush.status': this.statusText() };
   }
 
   tools(): never[] {
@@ -111,14 +114,22 @@ export class InterestPushWorld implements World {
     await this.run('start');
     this.scheduleCheck();
     this.schedulePush();
+    // 问答回执一到就该认领（已读、不再推送），不能等下一次检查（默认隔两小时）。
+    this.answerTimer = setInterval(() => {
+      this.scanAnswers();
+      this.saveState();
+    }, 15_000);
+    this.answerTimer.unref?.();
   }
 
   async stop(): Promise<void> {
     this.host = null;
     if (this.checkTimer) clearInterval(this.checkTimer);
     if (this.pushTimer) clearTimeout(this.pushTimer);
+    if (this.answerTimer) clearInterval(this.answerTimer);
     this.checkTimer = null;
     this.pushTimer = null;
+    this.answerTimer = null;
   }
 
   console(language: Language = 'zh'): WorldConsoleDecl {
@@ -167,7 +178,7 @@ export class InterestPushWorld implements World {
           description: '把这段交给 bot：news.item 事件怎么处理、气泡对话怎么走。',
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
-          vars: [{ name: 'interest-push.status', description: '当前的检查与推送读数，此刻的值。', multiline: false }],
+          vars: [{ name: 'interestpush.status', description: '当前的检查与推送读数，此刻的值。', multiline: false }],
         },
       ],
     };
@@ -338,7 +349,12 @@ export class InterestPushWorld implements World {
       fresh.push(item);
     }
     if (fresh.length > 0) this.seen.save();
-    const byId = new Map(this.items.map((i) => [i.id, i]));
+    const byId = new Map(
+      // 早先抓进来的 HF 条目按旧规则放行过：按现在的相关性规则重新过一遍，不相关的清掉。
+      this.items
+        .filter((i) => i.source !== 'hf' || relevant(`${i.title} ${i.abstract}`, this.opts.cfg.keywords))
+        .map((i) => [i.id, i]),
+    );
     for (const item of fresh) byId.set(item.id, item);
     this.items = [...byId.values()]
       .sort((a, b) => (a.issued === b.issued ? b.foundAt - a.foundAt : b.issued.localeCompare(a.issued)))
@@ -363,7 +379,6 @@ export class InterestPushWorld implements World {
         source: this.id,
         origin: 'internal',
         senderKey: item.id,
-        tags: ['snapshot'],
         text: this.itemEventText(item),
       },
       { trigger: 'flush' },
@@ -375,10 +390,15 @@ export class InterestPushWorld implements World {
     this.log(`已推送 ${item.id}：${item.title.slice(0, 40)}`);
   }
 
+  /**
+   * 事件正文。开头先写一句「该做什么」：这段正文就在模型眼前，比只放在系统前缀里的提示词更靠得住
+   * （人设允许沉默，实测它会直接 end_turn 不出声）。
+   */
   private itemEventText(item: NewsItem): string {
     const authors = item.authors.slice(0, 3).join('、') + (item.authors.length > 3 ? ' 等' : '');
     return [
-      `[研究] ${item.title}`,
+      '[研究] 订阅推送一条。请按「兴趣推送」的环境提示词开口：先用 pet_say 说一两句，再用 pet_ask 给按钮；不要沉默。',
+      `标题：${item.title}`,
       `期刊：${item.journal}${item.tier ? `（${item.tier}）` : ''} · 上线 ${item.issued}`,
       `作者：${authors || '—'}${item.team ? ` · ${item.team}` : ''}`,
       `DOI：${item.doi ?? '—'}`,

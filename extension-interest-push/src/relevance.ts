@@ -1,8 +1,9 @@
 /**
  * 相关性过滤：Hugging Face 日榜是整条 AI 领域的榜单，只留与研究领域有关的条目。
  *
- * 判定顺序：命中任一关键词短语 → 收；命中两个以上关键词词根 → 收；命中两个以上领域词 → 收。
- * 关键词由使用者在配置里改，领域词是给「关键词还没调好」时兜底的。
+ * 判定顺序：命中任一关键词短语 → 收；命中两个以上**领域词** → 收。
+ * 不再用关键词里的泛词做二次判定（edge、computing、learning 这类会把「目标导航」
+ * 一类的通用 AI 论文也放进来，实测放过一篇）。
  */
 const STOP = new Set([
   'with', 'from', 'using', 'based', 'under', 'into', 'that', 'this', 'these', 'those',
@@ -17,7 +18,7 @@ const DOMAIN_TOKENS = [
   'architecture search', 'distillation', 'quantization', 'edge comput', 'industrial internet',
 ];
 
-/** 关键词 → 词根集合（短语本身也算一个）。 */
+/** 关键词 → 词根集合（短语本身也算一个）；面板与调试用。 */
 export function relevanceTokens(keywords: string[]): string[] {
   const out = new Set<string>();
   for (const keyword of keywords) {
@@ -37,11 +38,6 @@ export function relevant(text: string, keywords: string[]): boolean {
   for (const keyword of keywords) {
     const phrase = keyword.trim().toLowerCase();
     if (phrase !== '' && hay.includes(phrase)) return true;
-  }
-  let hits = 0;
-  for (const token of relevanceTokens(keywords)) {
-    if (hay.includes(token)) hits += 1;
-    if (hits >= 2) return true;
   }
   let domain = 0;
   for (const token of DOMAIN_TOKENS) {

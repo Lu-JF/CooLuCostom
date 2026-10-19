@@ -80,6 +80,7 @@ describe('相关性过滤', () => {
 
   it('通用 AI 标题被挡掉', () => {
     expect(relevant('Reward-Specific Token-level Preference Optimization for LLM Alignment', keywords)).toBe(false);
+    expect(relevant('StopWatch: Goal Grounding for Object-goal Navigation, deployed on edge devices for efficient computing', keywords)).toBe(false);
     expect(relevant('', keywords)).toBe(false);
   });
 

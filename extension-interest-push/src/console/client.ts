@@ -34,8 +34,9 @@ const localDateValue = (ms: number): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** 00:00 到 23:45，一刻钟一档（能设 10:15 这类时刻）。 */
-const TIME_OPTIONS: string[] = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`);
+/** 时、分两栏下拉：小时 00–23，分钟 5 分钟一档。全程点选，不用打字，也不会有非法输入。 */
+const HOUR_OPTIONS: string[] = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTIONS: string[] = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 /** 页签之间的跳转：控制台是 hash 路由，切失败就留在原地（本页仍能用）。 */
 function switchPanel(ctx: ConsolePanelContext, panelId: string): void {
@@ -67,9 +68,30 @@ function numberInput(ui: U, value: string, width = '5.5em'): HTMLInputElement {
   return input;
 }
 
-/** 时间下拉菜单：避免手打时间出错。 */
-function timeSelect(ui: U, value: string, onChange: (v: string) => void): HTMLSelectElement {
-  return ui.select({ options: TIME_OPTIONS, value, onInput: onChange });
+interface TimeField {
+  el: HTMLDivElement;
+  value(): string;
+  set(value: string): void;
+}
+
+/** 「时 : 分」两个下拉。存量值不在 5 分钟档上时，补一个选项进去，原值照旧显示。 */
+function timeField(ui: U, initial: string): TimeField {
+  const hour = ui.select({ options: HOUR_OPTIONS, value: initial.slice(0, 2) });
+  const minute = ui.select({ options: MINUTE_OPTIONS, value: initial.slice(3, 5) });
+  const el = ui.h('div', 'ip-inline');
+  el.append(hour, ui.h('span', 'ip-timecolon', ':'), minute);
+  return {
+    el,
+    value: () => `${hour.value}:${minute.value}`,
+    set: (value) => {
+      const h = value.slice(0, 2);
+      const m = value.slice(3, 5);
+      if (!HOUR_OPTIONS.includes(h) && h !== '') hour.appendChild(new Option(h, h));
+      if (!MINUTE_OPTIONS.includes(m) && m !== '') minute.appendChild(new Option(m, m));
+      hour.value = h;
+      minute.value = m;
+    },
+  };
 }
 
 interface TagEditor {
@@ -82,7 +104,7 @@ interface TagEditor {
 function tagEditor(
   ui: U,
   t: InterestText,
-  opts: { add: () => HTMLSelectElement | HTMLInputElement; signal?: AbortSignal },
+  opts: { add: () => { el: HTMLElement; value(): string; clear?(): void }; signal?: AbortSignal },
 ): TagEditor {
   const el = ui.h('div', 'ip-tags');
   const chips = ui.h('div', 'ip-taglist');
@@ -109,8 +131,8 @@ function tagEditor(
   };
   const control = opts.add();
   // 输入框上按回车也能加；监听随面板信号一起撤销。
-  if (control instanceof HTMLInputElement) {
-    control.addEventListener(
+  if (control.el instanceof HTMLInputElement) {
+    control.el.addEventListener(
       'keydown',
       (ev) => {
         if (ev.key === 'Enter') {
@@ -122,14 +144,13 @@ function tagEditor(
     );
   }
   const add = (): void => {
-    const raw = control instanceof HTMLSelectElement ? control.value : (control as HTMLInputElement).value;
-    const value = String(raw ?? '').trim();
+    const value = String(control.value() ?? '').trim();
     if (value === '' || current.includes(value)) return;
     current.push(value);
-    if (!(control instanceof HTMLSelectElement)) (control as HTMLInputElement).value = '';
+    control.clear?.();
     redraw();
   };
-  addRow.append(control, addBtn);
+  addRow.append(control.el, addBtn);
   el.append(chips, ui.h('div', 'ip-taghint', t.settings.groupTags), addRow);
   redraw();
   return {
@@ -191,30 +212,15 @@ function mountDetail(ctx: ConsolePanelContext): void {
     busy = null;
   };
 
+  // 只留「换一篇」：抓新数据这件事在列表页与配置页都有「立即检查一次」，这里再来一个就是重复。
   const top = ui.rowbar();
   const note = ui.h('span', 'ip-note');
-  const refreshBtn = ui.button(t.detail.refresh, {
-    size: 'sm',
-    onClick: () => {
-      void (async () => {
-        setBusy(true, t.list.checking);
-        try {
-          view = (await ctx.invoke<InvokeResult>('detail', ['refresh'])).view;
-          render();
-        } catch (err) {
-          ui.toast(errText(err), 'bad');
-        } finally {
-          setBusy(false);
-        }
-      })();
-    },
-  });
   const nextBtn = ui.button(t.detail.next, {
     size: 'sm',
     onClick: () => {
       void (async () => {
         try {
-          view = (await ctx.invoke<InvokeResult>('detail', ['next'])).view;
+          view = (await ctx.invoke<InvokeResult>('next')).view;
           render();
         } catch (err) {
           ui.toast(errText(err), 'bad');
@@ -222,7 +228,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
       })();
     },
   });
-  top.append(refreshBtn, nextBtn, note);
+  top.append(nextBtn, note);
   ctx.root.appendChild(top);
 
   // 标题与摘要合成一张「论文速览」：标题一行醒目，摘要一段浅色，中间留一口气。
@@ -236,7 +242,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
       void (async () => {
         setBusy(true);
         try {
-          const out = await ctx.invoke<InvokeResult>('detail', ['translate']);
+          const out = await ctx.invoke<InvokeResult>('translate');
           view = out.view;
           if (!out.ok) ui.toast(t.detail.failed(String(out.reason ?? '')), 'bad');
         } catch (err) {
@@ -330,7 +336,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
         void (async () => {
           setBusy(true, t.detail.downloading);
           try {
-            const out = await ctx.invoke<InvokeResult>('detail', ['download']);
+            const out = await ctx.invoke<InvokeResult>('download');
             view = out.view;
             ui.toast(out.ok ? String(out.reason ?? '') : t.detail.failed(String(out.reason ?? '')), out.ok ? 'ok' : 'bad');
           } catch (err) {
@@ -349,7 +355,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   void (async () => {
     setBusy(true, t.list.checking);
     try {
-      view = (await ctx.invoke<InvokeResult>('detail', ['state'])).view;
+      view = (await ctx.invoke<InvokeResult>('state')).view;
       render();
     } catch (err) {
       titleBody.textContent = errText(err);
@@ -385,7 +391,7 @@ function mountList(ctx: ConsolePanelContext): void {
       void (async () => {
         setBusy(true);
         try {
-          view = (await ctx.invoke<InvokeResult>('list', ['checkNow'])).view;
+          view = (await ctx.invoke<InvokeResult>('checkNow')).view;
           ui.toast(t.settings.saved, 'ok');
         } catch (err) {
           ui.toast(errText(err), 'bad');
@@ -424,7 +430,7 @@ function mountList(ctx: ConsolePanelContext): void {
       line.addEventListener('click', () => {
         void (async () => {
           try {
-            view = (await ctx.invoke<InvokeResult>('list', ['open', row.id])).view;
+            view = (await ctx.invoke<InvokeResult>('open', [row.id])).view;
             render();
             switchPanel(ctx, 'detail');
           } catch (err) {
@@ -439,7 +445,7 @@ function mountList(ctx: ConsolePanelContext): void {
   void (async () => {
     setBusy(true);
     try {
-      view = (await ctx.invoke<InvokeResult>('list', ['state'])).view;
+      view = (await ctx.invoke<InvokeResult>('state')).view;
       render();
     } catch (err) {
       body.replaceChildren(ui.msgline(t.list.error(errText(err)), true));
@@ -475,7 +481,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
       void (async () => {
         setBusy(true);
         try {
-          view = (await ctx.invoke<InvokeResult>('settings', ['checkNow'])).view;
+          view = (await ctx.invoke<InvokeResult>('checkNow')).view;
           render();
           ui.toast(t.settings.saved, 'ok');
         } catch (err) {
@@ -492,7 +498,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
       void (async () => {
         setBusy(true);
         try {
-          view = (await ctx.invoke<InvokeResult>('settings', ['pushNow'])).view;
+          view = (await ctx.invoke<InvokeResult>('pushNow')).view;
           render();
         } catch (err) {
           ui.toast(errText(err), 'bad');
@@ -515,11 +521,16 @@ function mountSettings(ctx: ConsolePanelContext): void {
     fieldRow(ui, t.settings.dailyCap, capInput),
     fieldRow(ui, t.settings.maxRounds, roundsInput),
   );
-  const pushTimesEditor = tagEditor(ui, t, { add: () => timeSelect(ui, '10:30', () => {}) });
+  const pushTimesEditor = tagEditor(ui, t, {
+    add: () => {
+      const f = timeField(ui, '10:30');
+      return { el: f.el, value: () => f.value() };
+    },
+  });
   const quietRow = ui.h('div', 'ip-fields');
-  const quietStart = timeSelect(ui, '22:30', () => {});
-  const quietEnd = timeSelect(ui, '08:30', () => {});
-  quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart), fieldRow(ui, t.settings.quietEnd, quietEnd));
+  const quietStart = timeField(ui, '22:30');
+  const quietEnd = timeField(ui, '08:30');
+  quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart.el), fieldRow(ui, t.settings.quietEnd, quietEnd.el));
   const week = weekdayButtons(ui);
   // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
   const weekRow = ui.h('div', 'ip-row-block');
@@ -544,10 +555,19 @@ function mountSettings(ctx: ConsolePanelContext): void {
   // ---- 数据源
   const sources = ui.sheet({ title: t.settings.groupSources });
   const keywordsEditor = tagEditor(ui, t, {
-    add: () => ui.input({ placeholder: t.settings.keywordPlaceholder }),
+    add: () => {
+      const input = ui.input({ placeholder: t.settings.keywordPlaceholder });
+      return { el: input, value: () => input.value, clear: () => { input.value = ''; } };
+    },
     signal: ctx.signal,
   });
-  const catsEditor = tagEditor(ui, t, { add: () => ui.input({ placeholder: 'eess.SP' }), signal: ctx.signal });
+  const catsEditor = tagEditor(ui, t, {
+    add: () => {
+      const input = ui.input({ placeholder: 'eess.SP' });
+      return { el: input, value: () => input.value, clear: () => { input.value = ''; } };
+    },
+    signal: ctx.signal,
+  });
   const windowInput = numberInput(ui, '30');
   const rowsInput = numberInput(ui, '50');
   const mailtoInput = ui.input({ placeholder: 'name@example.org' });
@@ -669,7 +689,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     dailyCap: Number(capInput.value),
     maxRounds: Number(roundsInput.value),
     pushTimes: uniqSorted(pushTimesEditor.values()),
-    quiet: [quietStart.value, quietEnd.value],
+    quiet: [quietStart.value(), quietEnd.value()],
     pushDays: week.values(),
     pausedUntil: pausedUntilFromForm(),
     keywords: uniqSorted(keywordsEditor.values()),
@@ -709,7 +729,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     try {
       const before = view?.config ?? null;
       const payload = form();
-      const out = await ctx.invoke<InvokeResult>('settings', ['saveSettings', payload]);
+      const out = await ctx.invoke<InvokeResult>('saveSettings', [payload]);
       view = out.view;
       // 保存后回读一遍：值确实变了 = 写回成功；与提交值一致 = 原样落地，否则说明被夹到合法范围。
       const after = snapshotOf(view.config, card);
@@ -746,10 +766,8 @@ function mountSettings(ctx: ConsolePanelContext): void {
     pushTimesEditor.setValues(c.pushTimes);
     keywordsEditor.setValues(c.keywords);
     catsEditor.setValues(c.arxivCats);
-    if (![...quietStart.options].some((o) => o.value === c.quiet[0])) quietStart.appendChild(new Option(c.quiet[0] ?? '', c.quiet[0] ?? ''));
-    if (![...quietEnd.options].some((o) => o.value === c.quiet[1])) quietEnd.appendChild(new Option(c.quiet[1] ?? '', c.quiet[1] ?? ''));
-    quietStart.value = c.quiet[0] ?? '';
-    quietEnd.value = c.quiet[1] ?? '';
+    quietStart.set(c.quiet[0] ?? '22:30');
+    quietEnd.set(c.quiet[1] ?? '08:30');
     week.setValues(c.pushDays);
     if (c.pausedUntil > 0) {
       if (document.activeElement !== pauseDate) pauseDate.value = localDateValue(c.pausedUntil);
@@ -777,7 +795,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   void (async () => {
     setBusy(true);
     try {
-      view = (await ctx.invoke<InvokeResult>('settings', ['state'])).view;
+      view = (await ctx.invoke<InvokeResult>('state')).view;
       render();
     } catch (err) {
       ctx.root.appendChild(ui.msgline(errText(err), true));

@@ -128,7 +128,8 @@ describe('推送与回执', () => {
     const pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(1);
     const text = pushed[0]!.text;
-    expect(text).toContain('[研究] Bearing fault diagnosis');
+    expect(text).toContain('[研究] 订阅推送一条');
+    expect(text).toContain('标题：Bearing fault diagnosis');
     expect(text).toContain('DOI：10.1016/j.ymssp.2026.123456');
     expect(text).toContain('爬取源：crossref:0888-3270');
     expect(text).toMatch(/编号 [0-9a-f]{8}/);
@@ -226,7 +227,8 @@ describe('推送与回执', () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     await world.invoke('settings', 'pushNow', [], 'zh');
-    host.seed({ type: 'desktop-pet.answer', text: '不感兴趣' });
+    // 真实回执长这样（实测）：[answer] Veil回答「这篇要细说吗?」:选了第 3 项「跳过」
+    host.seed({ type: 'desktop-pet.answer', text: '[answer] Veil回答「这篇要细说吗?」:选了第 3 项「跳过」' });
     await world.invoke('settings', 'checkNow', [], 'zh');
     await world.invoke('settings', 'pushNow', [], 'zh');
     expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(1);
@@ -313,6 +315,27 @@ describe('控制台声明', () => {
     expect(decl.lamps?.length).toBe(3);
     // 选项卡上方不再有「未读」标签（列表里已读的才标）。
     expect(decl.badges?.map((b) => b.label)).toEqual(['期刊', '关键词', '已暂停']);
-    expect(world.envPromptVars()['interest-push.status']).toContain('今日推送');
+    expect(world.envPromptVars()['interestpush.status']).toContain('今日推送');
+  });
+});
+
+describe('陈旧条目的清理', () => {
+  it('早先按旧规则放进来的 Hugging Face 条目会按现在的相关性规则清掉', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-prune-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const stale = {
+      id: 'stale001', doi: null, title: 'StopWatch: Goal Grounding for Object-goal Navigation',
+      authors: ['A'], team: null, journal: 'Hugging Face Daily Papers', journalIssn: null, tier: null,
+      issued: '2026-10-14', abstract: 'deployed on edge devices for efficient computing',
+      url: 'https://huggingface.co/papers/stale001', pdfUrl: null, source: 'hf',
+      sourceDetail: 'hf:daily_papers', foundAt: 1,
+    };
+    const keep = { ...stale, id: 'keep0001', title: 'Bearing fault diagnosis with a lightweight network', abstract: 'bearing fault diagnosis' };
+    writeFileSync(join(dataDir, 'news', 'items.json'), JSON.stringify([stale, keep]));
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    const ids = world.view('zh').items.map((i) => i.id);
+    expect(ids).not.toContain('stale001');
+    expect(ids).toContain('keep0001');
   });
 });

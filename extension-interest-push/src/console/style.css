@@ -113,6 +113,14 @@
   min-width: 0;
 }
 
+.ip-inline select {
+  min-width: 4.2em;
+}
+
+.ip-timecolon {
+  color: var(--muted-foreground);
+}
+
 .ip-inline input {
   min-width: 240px;
 }
