@@ -125,7 +125,7 @@ try {
     order: [...document.querySelectorAll('.sheet h3')].map((h) => (h.childNodes[0]?.textContent ?? '').trim()),
   }));
   check('详情给出期刊/上线/作者/团队/DOI/爬取源', ['期刊', '上线', '作者', '团队', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 4)).join(','));
-  check('从上到下是论文速览、中文译文、详情卡', JSON.stringify(detail.order.slice(0, 3)) === JSON.stringify(['论文速览', '中文译文', '详情']), detail.order.slice(0, 3).join(' → '));
+  check('从上到下是大肥鱼速评、论文速览、中文译文、详情卡', JSON.stringify(detail.order.slice(0, 4)) === JSON.stringify(['大肥鱼速评', '论文速览', '中文译文', '详情']), detail.order.slice(0, 4).join(' → '));
   check('速览里标题与摘要都有内容', detail.title.length > 10 && detail.abstract.length >= 10, `${detail.title.slice(0, 34)} … / ${detail.abstract.slice(0, 34)}`);
   check('详情卡键列不再占固定宽度', detail.kvTableWidth === 0 || detail.kvFirstColWidth / detail.kvTableWidth < 0.3, `键列 ${Math.round(detail.kvFirstColWidth)}px / 表宽 ${Math.round(detail.kvTableWidth)}px`);
   check('翻译按钮在速览卡里，且位于摘要下方', detail.translateBelowAbstract, detail.buttons.filter((b) => b.includes('翻译')).join('/'));
@@ -133,6 +133,68 @@ try {
   check('已取消下拉列表切换', detail.selects === 0, `${detail.selects} 个下拉`);
   check('详情卡里有打开原文与下载', detail.buttons.includes('打开原文') && detail.buttons.includes('下载原文'), '');
   check('详情卡里有「收进兴趣记录」', detail.buttons.includes('收进兴趣记录') || detail.buttons.includes('已在兴趣记录里'), '');
+
+  // ---- 速评卡：位置、星星，以及真点一次（不弹整页遮罩）
+  const reviewCard = await page.evaluate(() => {
+    const sheets = [...document.querySelectorAll('.sheet')];
+    const card = sheets.find((s) => (s.querySelector('h3')?.textContent ?? '').includes('大肥鱼速评'));
+    const ov = sheets.find((s) => (s.querySelector('h3')?.textContent ?? '').includes('论文速览'));
+    return {
+      has: Boolean(card),
+      aboveOverview: Boolean(card && ov && card.getBoundingClientRect().top < ov.getBoundingClientRect().top),
+      stars: card ? card.querySelectorAll('.ip-star').length : 0,
+      filled: card ? card.querySelectorAll('.ip-star-on').length : 0,
+      ask: card ? [...card.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('让大肥鱼评一下')) : false,
+    };
+  });
+  check('有「大肥鱼速评」卡，排在「论文速览」上面', reviewCard.has && reviewCard.aboveOverview, '');
+  check('速评卡是 10 星制，或给出评价入口', reviewCard.stars === 10 || reviewCard.ask, `${reviewCard.stars} 颗星 ${reviewCard.ask ? '· 有入口' : ''}`);
+
+  if (reviewCard.ask) {
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')].find((x) => (x.textContent ?? '').trim() === '让大肥鱼评一下');
+      b?.click();
+    });
+    await new Promise((r) => setTimeout(r, 900));
+    const during = await page.evaluate(() => ({
+      modal: Boolean(document.querySelector('.modal.busy')),
+      status: [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()),
+    }));
+    check('速评时不弹整页遮罩（页面不卡）', during.modal === false, during.modal ? '出现了 .modal.busy' : '');
+    check('速评时按钮旁有状态（转圈 / 正在看）', during.status.some((t) => t.includes('正在看')), during.status.join(' | '));
+    await page.waitForFunction(() => document.querySelectorAll('.ip-star-on').length >= 1, null, { timeout: 120_000 }).catch(() => {});
+    const after = await page.evaluate(() => ({
+      stars: document.querySelectorAll('.ip-review .ip-star').length + document.querySelectorAll('.ip-stars .ip-star').length,
+      on: document.querySelectorAll('.ip-star-on').length,
+      score: document.querySelector('.ip-score')?.textContent ?? '',
+      text: document.querySelector('.ip-review-text')?.textContent ?? '',
+    }));
+    check('速评回来后有点亮的星星、分数与评语', after.on >= 1 && /\d/.test(after.score) && after.text.length > 4, `${after.score} · ${after.text.slice(0, 26)}`);
+  } else {
+    check('速评回来后有点亮的星星、分数与评语', reviewCard.filled >= 1, `已有缓存：${reviewCard.filled}/10`);
+  }
+
+  // ---- 翻译：同样不弹遮罩，只在按钮旁转圈，回来写「翻译成功」
+  await page.evaluate(() => {
+    const b = [...document.querySelectorAll('button')].find((x) => /翻译/.test((x.textContent ?? '').trim()));
+    b?.click();
+  });
+  await new Promise((r) => setTimeout(r, 900));
+  const duringTr = await page.evaluate(() => ({
+    modal: Boolean(document.querySelector('.modal.busy')),
+    status: [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()),
+  }));
+  check('翻译时不弹整页遮罩（页面不卡）', duringTr.modal === false, duringTr.modal ? '出现了 .modal.busy' : '');
+  check('翻译时按钮旁有「翻译中…」或已有结果', duringTr.status.some((t) => t.includes('翻译中') || t.includes('翻译成功')), duringTr.status.join(' | '));
+  await page
+    .waitForFunction(() => [...document.querySelectorAll('.ip-status')].some((e) => (e.textContent ?? '').includes('翻译成功')), null, { timeout: 180_000 })
+    .catch(() => {});
+  const trDone = await page.evaluate(() => ({
+    status: [...document.querySelectorAll('.ip-status')].map((e) => (e.textContent ?? '').trim()),
+    body: document.querySelector('.ip-tr')?.textContent?.length ?? 0,
+  }));
+  check('翻译结束后显示「翻译成功」', trDone.status.some((t) => t.includes('翻译成功')), trDone.status.join(' | ').slice(0, 48));
+  check('译文真的渲染出来了', trDone.body > 20, `${trDone.body} 字`);
 
   // 真点一次「换一篇」：这是使用者报过的问题，必须在这里被抓住。
   const clickedNext = await page.evaluate(() => {
@@ -168,6 +230,17 @@ try {
     };
   });
   check('列表里有条目', list.rows > 0, `${list.rows} 条`);
+  const rowReviews = await page.evaluate(() =>
+    [...document.querySelectorAll('.ip-row')].map((row) => ({
+      stars: row.querySelectorAll('.ip-star').length,
+      ask: [...row.querySelectorAll('button')].some((b) => (b.textContent ?? '').includes('速评')),
+    })),
+  );
+  check(
+    '列表每篇都带速评：已有分数或「速评」入口',
+    rowReviews.length > 0 && rowReviews.every((r) => r.stars === 10 || r.ask),
+    `${rowReviews.filter((r) => r.stars === 10).length}/${rowReviews.length} 行已有分数`,
+  );
   check('条目带标题与期刊行', list.titles[0]?.length > 10 && list.first.includes('·'), list.titles[0]?.slice(0, 50) ?? '');
   check('不再标「未读」，改为标「已读」', !list.text.includes('未读'), list.text.includes('已读') ? '有已读标记' : '当前都是未读（无标记）');
   check('顶部有检查状态与按钮', list.note.includes('上次检查') && list.refresh, list.note.slice(0, 60));
@@ -242,10 +315,15 @@ try {
   await openPanel('detail', '.ip-ov-title');
   await page.waitForFunction(() => !document.querySelector('.busy, .busy-overlay, [class*="busy"]'), null, { timeout: 20_000 }).catch(() => {});
   const clickedKeep = await page.evaluate(() => {
-    const btn = [...document.querySelectorAll('button')].find((b) => ['收进兴趣记录', '已在兴趣记录里'].includes((b.textContent ?? '').trim()) && !b.disabled);
-    if (!btn) return 'none';
-    btn.click();
-    return 'clicked';
+    const btns = [...document.querySelectorAll('button')];
+    const btn = btns.find((b) => ['收进兴趣记录', '已在兴趣记录里'].includes((b.textContent ?? '').trim()) && !b.disabled);
+    if (btn) {
+      btn.click();
+      return 'clicked';
+    }
+    // 当前这篇之前收过了：按钮是「已在兴趣记录里」且禁用，这本身就是「已经在记录里」的证据。
+    const already = btns.some((b) => (b.textContent ?? '').trim() === '已在兴趣记录里');
+    return already ? 'already' : 'none';
   });
   await page.waitForTimeout(1500);
   const recordsOk = await openPanel('records', '.ip-rec, .placeholder');

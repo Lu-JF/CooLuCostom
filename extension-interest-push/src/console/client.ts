@@ -197,11 +197,39 @@ function weekdayButtons(ui: U, onChange?: () => void): { el: HTMLDivElement; val
 
 // --------------------------------------------------------------------- 详情
 
+/** 行内状态：一个小圆圈 + 一句话，替代会挡住整页的 busy 遮罩（翻译、速评、检查都长，遮罩体验太差）。 */
+function makeStatus(ui: ConsolePanelContext['ui']): { el: HTMLElement; set: (text: string, tone?: 'busy' | 'ok' | 'bad' | '') => void } {
+  const el = ui.h('span', 'ip-status');
+  return {
+    el,
+    set: (text, tone = '') => {
+      el.textContent = text;
+      el.className = `ip-status${tone === '' ? '' : ` ip-status-${tone}`}`;
+      el.hidden = text === '';
+    },
+  };
+}
+
+/** 10 颗星：够分点亮，不够空心。总分可能是 7.5 这样的小数，按四舍五入点亮。 */
+function renderStars(el: HTMLElement, total: number | null): void {
+  el.replaceChildren();
+  if (total === null) return;
+  const filled = Math.max(0, Math.min(10, Math.round(total)));
+  for (let i = 1; i <= 10; i += 1) {
+    const star = document.createElement('span');
+    star.className = i <= filled ? 'ip-star ip-star-on' : 'ip-star';
+    star.textContent = i <= filled ? '★' : '☆';
+    el.appendChild(star);
+  }
+}
+
 function mountDetail(ctx: ConsolePanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
   let view: InterestPushView | null = null;
   let busy: { dispose(): void } | null = null;
+  /** 正在叫模型评速评：期间不重复发请求，也不显示「还没评过」。 */
+  let reviewing = false;
 
   const setBusy = (on: boolean, text: string = t.detail.translating): void => {
     if (on) {
@@ -221,6 +249,8 @@ function mountDetail(ctx: ConsolePanelContext): void {
       void (async () => {
         try {
           view = (await ctx.invoke<InvokeResult>('next')).view;
+          translateStatus.set('', '');
+          reviewStatus.set('', '');
           render();
         } catch (err) {
           ui.toast(errText(err), 'bad');
@@ -231,30 +261,64 @@ function mountDetail(ctx: ConsolePanelContext): void {
   top.append(nextBtn, note);
   ctx.root.appendChild(top);
 
-  // 标题与摘要合成一张「论文速览」：标题一行醒目，摘要一段浅色，中间留一口气。
-  const overviewCard = ui.sheet({ title: t.detail.overviewTitle });
-  const overviewBar = ui.rowbar();
-  const titleBody = ui.h('div', 'ip-ov-title');
-  const abstractBody = ui.h('div', 'ip-ov-abstract');
-  const translateBtn = ui.button(t.detail.translate, {
+  // 大肥鱼速评：卡片排最上面——气泡推送也是先念这一段，页面顺序与对话顺序保持一致。
+  const reviewCard = ui.sheet({ title: t.detail.reviewTitle });
+  const reviewHead = ui.rowbar();
+  const starsEl = ui.h('span', 'ip-stars');
+  const scoreEl = ui.h('span', 'ip-score');
+  const reviewStatus = makeStatus(ui);
+  const reviewBody = ui.h('div', 'ip-review');
+  const reviewBtn = ui.button(t.detail.reviewAsk, {
     size: 'sm',
     onClick: () => {
       void (async () => {
-        setBusy(true);
+        reviewing = true;
+        reviewBtn.disabled = true;
+        reviewStatus.set(t.detail.reviewing, 'busy');
         try {
-          const out = await ctx.invoke<InvokeResult>('translate');
+          const out = await ctx.invoke<InvokeResult>('review');
           view = out.view;
-          if (!out.ok) ui.toast(t.detail.failed(String(out.reason ?? '')), 'bad');
+          reviewStatus.set(out.ok ? '' : t.detail.reviewFailed(String(out.reason ?? '')), out.ok ? '' : 'bad');
         } catch (err) {
-          ui.toast(errText(err), 'bad');
+          reviewStatus.set(t.detail.reviewFailed(errText(err)), 'bad');
         } finally {
-          setBusy(false);
+          reviewing = false;
+          reviewBtn.disabled = false;
           render();
         }
       })();
     },
   });
-  overviewBar.append(translateBtn);
+  reviewHead.append(starsEl, scoreEl, reviewStatus.el, reviewBtn);
+  reviewCard.body.append(reviewHead, reviewBody);
+
+  // 标题与摘要合成一张「论文速览」：标题一行醒目，摘要一段浅色，中间留一口气。
+  const overviewCard = ui.sheet({ title: t.detail.overviewTitle });
+  const overviewBar = ui.rowbar();
+  const titleBody = ui.h('div', 'ip-ov-title');
+  const abstractBody = ui.h('div', 'ip-ov-abstract');
+  const translateStatus = makeStatus(ui);
+  const translateBtn = ui.button(t.detail.translate, {
+    size: 'sm',
+    onClick: () => {
+      void (async () => {
+        // 翻译要十几秒：不占整页，只在按钮旁边转圈，翻完在这里写结果。
+        translateBtn.disabled = true;
+        translateStatus.set(t.detail.translating, 'busy');
+        try {
+          const out = await ctx.invoke<InvokeResult>('translate');
+          view = out.view;
+          translateStatus.set(out.ok ? t.detail.translateOk : t.detail.failed(String(out.reason ?? '')), out.ok ? 'ok' : 'bad');
+        } catch (err) {
+          translateStatus.set(t.detail.failed(errText(err)), 'bad');
+        } finally {
+          translateBtn.disabled = false;
+          render();
+        }
+      })();
+    },
+  });
+  overviewBar.append(translateBtn, translateStatus.el);
   // 标题 → 摘要 → 翻译按钮：按钮就落在原文与译文之间，符合阅读顺序。
   overviewCard.body.append(titleBody, abstractBody, overviewBar);
 
@@ -269,7 +333,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   const actionBar = ui.rowbar();
   detailCard.body.append(detailBody, actionBar);
 
-  ctx.root.append(overviewCard.el, translationCard.el, detailCard.el);
+  ctx.root.append(reviewCard.el, overviewCard.el, translationCard.el, detailCard.el);
 
   function render(): void {
     const v = view;
@@ -290,11 +354,25 @@ function mountDetail(ctx: ConsolePanelContext): void {
     if (!item) {
       titleBody.textContent = t.detail.pick;
       overviewCard.el.hidden = false;
+      reviewCard.el.hidden = true;
       abstractBody.textContent = '';
       translationCard.el.hidden = true;
       detailCard.el.hidden = true;
       return;
     }
+    reviewCard.el.hidden = false;
+
+    // 速评：有就显示星星与评语，没有就给按钮；评的时候按钮转圈，别整页卡住。
+    const rv = v?.review ?? null;
+    renderStars(starsEl, rv?.total ?? null);
+    scoreEl.textContent = typeof rv?.total === 'number' ? t.detail.stars(rv.total) : '';
+    reviewBody.replaceChildren();
+    if (rv?.text) reviewBody.appendChild(ui.h('div', 'ip-review-text', rv.text));
+    if (!rv?.ok && !reviewing) {
+      const reason = String(rv?.reason ?? 'none');
+      reviewBody.appendChild(ui.msgline(reason === 'none' ? t.detail.reviewNone : t.detail.reviewFailed(reason), reason !== 'none'));
+    }
+    reviewBtn.hidden = Boolean(rv?.ok) || reviewing;
     overviewCard.el.hidden = false;
     translationCard.el.hidden = false;
     detailCard.el.hidden = false;
@@ -451,7 +529,36 @@ function mountList(ctx: ConsolePanelContext): void {
       // 只标「已读」，未读靠没有标记来区分。
       if (!row.unread) head.append(ui.pill(t.list.read, 'plain'));
       if (!row.hasAbstract) head.append(ui.pill(t.list.noAbstract, 'plain'));
-      line.append(head, ui.h('div', 'ip-meta', metaLine(t, row)));
+      // 速评一行：评过的显示星星与评语，没评过的给个按钮现评——评一次就落盘，两个页签共用同一份。
+      const revRow = ui.h('div', 'ip-review-row');
+      const rev = row.review;
+      if (rev !== null) {
+        const starBar = ui.h('span', 'ip-stars ip-stars-sm');
+        renderStars(starBar, rev.total);
+        revRow.append(starBar, ui.h('span', 'ip-score', t.detail.stars(rev.total)), ui.h('span', 'ip-review-snip', rev.text));
+      } else {
+        const rb = ui.button(t.list.review, {
+          size: 'sm',
+          onClick: (ev) => {
+            ev.stopPropagation();
+            rb.disabled = true;
+            rb.textContent = t.detail.reviewing;
+            void (async () => {
+              try {
+                view = (await ctx.invoke<InvokeResult>('review', [row.id])).view;
+              } catch (err) {
+                ui.toast(errText(err), 'bad');
+              } finally {
+                rb.disabled = false;
+                rb.textContent = t.list.review;
+                render();
+              }
+            })();
+          },
+        });
+        revRow.append(rb);
+      }
+      line.append(head, ui.h('div', 'ip-meta', metaLine(t, row)), revRow);
       line.addEventListener('click', () => {
         void (async () => {
           try {
@@ -500,40 +607,48 @@ function mountSettings(ctx: ConsolePanelContext): void {
   // ---- 顶部动作
   const top = ui.rowbar();
   const note = ui.h('span', 'ip-note');
+  const checkStatus = makeStatus(ui);
   const checkBtn = ui.button(t.settings.checkNow, {
     size: 'sm',
     onClick: () => {
       void (async () => {
-        setBusy(true);
+        // 「立即检查一次」= 重新抓一遍所有源并回填摘要，要几十秒。改成行内状态，页面照常能用。
+        checkBtn.disabled = true;
+        checkStatus.set(t.settings.checking, 'busy');
         try {
           view = (await ctx.invoke<InvokeResult>('checkNow')).view;
+          checkStatus.set(t.settings.saved, 'ok');
           render();
-          ui.toast(t.settings.saved, 'ok');
         } catch (err) {
-          ui.toast(errText(err), 'bad');
+          checkStatus.set(errText(err), 'bad');
         } finally {
-          setBusy(false);
+          checkBtn.disabled = false;
         }
       })();
     },
   });
+  const pushStatus = makeStatus(ui);
   const pushBtn = ui.button(t.settings.pushNow, {
     size: 'sm',
     onClick: () => {
       void (async () => {
-        setBusy(true);
+        // 推的是「推送」页签正在显示的那一篇，两个页签保持一致。
+        pushBtn.disabled = true;
+        pushStatus.set(t.settings.checking, 'busy');
         try {
-          view = (await ctx.invoke<InvokeResult>('pushNow')).view;
+          const out = await ctx.invoke<InvokeResult>('pushNow');
+          view = out.view;
+          pushStatus.set(out.ok ? t.settings.saved : String(out.reason ?? ''), out.ok ? 'ok' : 'bad');
           render();
         } catch (err) {
-          ui.toast(errText(err), 'bad');
+          pushStatus.set(errText(err), 'bad');
         } finally {
-          setBusy(false);
+          pushBtn.disabled = false;
         }
       })();
     },
   });
-  top.append(checkBtn, pushBtn, note);
+  top.append(checkBtn, pushBtn, checkStatus.el, pushStatus.el, note);
 
   // ---- 推送节奏
   const cadence = ui.sheet({ title: t.settings.groupPush });
@@ -709,7 +824,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   termFoot.append(ui.button(t.settings.addTerm, { size: 'sm', onClick: () => addTermRow() }), glossarySave);
   glossary.body.append(termGrid, termFoot);
 
-  ctx.root.append(top, cadence.el, sources.el, journals.el, glossary.el);
+  ctx.root.append(top, ui.msgline(t.settings.checkNowHint), cadence.el, sources.el, journals.el, glossary.el);
 
   // ---- 取值与保存
   const pausedUntilFromForm = (): number => {

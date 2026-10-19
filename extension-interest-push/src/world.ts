@@ -20,10 +20,11 @@ import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
+import { readReview, reviewItem } from './review.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
 import { translate } from './translate.ts';
-import type { InterestPushView, InterestRecord, NewsItem, TranslationState } from './view-types.ts';
+import type { InterestPushView, InterestRecord, NewsItem, ReviewState, TranslationState } from './view-types.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 /** 列表最多留多少条。 */
@@ -448,9 +449,61 @@ export class InterestPushWorld implements World {
     return this.opts.cfg.requireAbstract ? null : (pool[0] ?? null);
   }
 
+  /** 这条现在能不能推：有摘要（按设置）、没被判「不感兴趣」、没推过。 */
+  private pushable(item: NewsItem): boolean {
+    if (this.state.dismissed.includes(item.id)) return false;
+    if (this.state.pushedIds.includes(item.id)) return false;
+    if (this.opts.cfg.requireAbstract && item.abstract.trim() === '') return false;
+    return true;
+  }
+
+  /** 列表里用的速评缩略：总分 + 评语（没有就是 null）。 */
+  private reviewThumb(id: string): { total: number; text: string } | null {
+    const r = readReview(this.opts.dataDir, id);
+    return r === null ? null : { total: r.total, text: r.text };
+  }
+
+  /** 当前这篇的速评状态；没评过回 ok:false、reason:'none'。 */
+  private reviewStateOf(id: string): ReviewState {
+    const r = readReview(this.opts.dataDir, id);
+    if (r === null) return { ok: false, text: '', total: null, cached: false, reason: 'none', at: 0 };
+    return { ok: true, text: r.text, total: r.total, cached: true, reason: null, at: r.at };
+  }
+
+  /**
+   * 确保这篇有速评：有缓存直接用，没有就评一次并落盘。
+   * 失败不抛错——推送照发，只是气泡里没有速评那一段。
+   */
+  private async ensureReview(item: NewsItem): Promise<ReviewState | null> {
+    const cached = readReview(this.opts.dataDir, item.id);
+    if (cached) return { ok: true, text: cached.text, total: cached.total, cached: true, reason: null, at: cached.at };
+    const model = resolvePetModel(this.opts.botDir);
+    if (!model) {
+      this.log('速评跳过：找不到桌宠端点');
+      return null;
+    }
+    try {
+      const state = await reviewItem(item, {
+        dataDir: this.opts.dataDir,
+        keywords: this.opts.cfg.keywords,
+        baseUrl: model.baseUrl,
+        apiKey: model.apiKey,
+        model: model.model,
+        fetchImpl: this.opts.fetchImpl,
+      });
+      this.log(state.ok ? `大肥鱼速评 ${state.total}/10：${item.title.slice(0, 30)}` : `速评失败：${state.reason}`);
+      return state.ok ? state : null;
+    } catch (err) {
+      this.log(`速评出错：${String((err as Error)?.message ?? err)}`);
+      return null;
+    }
+  }
+
   private async pushItem(item: NewsItem, windowKey: string | null): Promise<void> {
     const host = this.host;
     if (!host) return;
+    // 先把速评评好：气泡的第一段就是速评与打分，缺了它推送就只剩摘要。
+    const review = await this.ensureReview(item);
     await host.pushEvent(
       {
         type: 'news.item',
@@ -458,7 +511,7 @@ export class InterestPushWorld implements World {
         source: this.id,
         origin: 'internal',
         senderKey: item.id,
-        text: this.itemEventText(item),
+        text: this.itemEventText(item, review),
       },
       { trigger: 'flush' },
     );
@@ -473,10 +526,14 @@ export class InterestPushWorld implements World {
    * 事件正文。开头先写一句「该做什么」：这段正文就在模型眼前，比只放在系统前缀里的提示词更靠得住
    * （人设允许沉默，实测它会直接 end_turn 不出声）。
    */
-  private itemEventText(item: NewsItem): string {
+  private itemEventText(item: NewsItem, review: ReviewState | null): string {
     const authors = item.authors.slice(0, 3).join('、') + (item.authors.length > 3 ? ' 等' : '');
     return [
-      '[研究] 订阅推送一条。请按「兴趣推送」的环境提示词开口：先用 pet_say 说一两句，再用 pet_ask 给按钮；不要沉默。',
+      '[研究] 订阅推送一条。请按「兴趣推送」的环境提示词开口：先用 pet_say 报「大肥鱼速评」的评价与星级，再讲论文，' +
+        '最后用 pet_ask 给按钮；不要沉默。',
+      review === null
+        ? '速评：（这次没评出来，直接讲论文，不要编分数）'
+        : `速评（大肥鱼，${review.total ?? '—'}/10）：${review.text}`,
       `标题：${item.title}`,
       `期刊：${item.journal}${item.tier ? `（${item.tier}）` : ''} · 上线 ${item.issued}`,
       `作者：${authors || '—'}${item.team ? ` · ${item.team}` : ''}`,
@@ -524,7 +581,27 @@ export class InterestPushWorld implements World {
         await this.run('manual');
         return { ok: true, reason: null, view: this.view(language) };
       }
+      if (method === 'review') {
+        // 三个面板都能叫：列表里点「速评」时把那条传进来，推送页不传就是当前这篇。
+        const id = String(args[0] ?? '').trim();
+        if (id !== '') this.activeId = id;
+        const item = this.activeItem();
+        if (!item) return { ok: false, reason: t.errors.noActive, view: this.view(language) };
+        const state = await this.ensureReview(item);
+        if (state === null || !state.ok) {
+          return { ok: false, reason: state?.reason ?? t.errors.noEndpoint, view: this.view(language) };
+        }
+        return { ok: true, reason: state.cached ? 'cached' : null, view: this.view(language) };
+      }
       if (method === 'pushNow') {
+        // 推送页显示哪篇就推哪篇：两个页签必须一致。这条自己还推不了（没摘要 / 已判不感兴趣 / 已推过）时
+        // 退回原来的「挑一条能推的」，免得按了没反应。
+        const item = this.activeItem();
+        if (item !== null && this.pushable(item)) {
+          await this.pushItem(item, null);
+          this.saveState();
+          return { ok: true, reason: null, view: this.view(language) };
+        }
         await this.run('force');
         return { ok: true, reason: null, view: this.view(language) };
       }
@@ -650,9 +727,11 @@ export class InterestPushWorld implements World {
         source: item.source,
         unread: !this.state.read.includes(item.id),
         hasAbstract: item.abstract.trim() !== '',
+        review: this.reviewThumb(item.id),
       })),
       active,
       translation: active ? (this.translations.get(active.id) ?? null) : null,
+      review: active ? this.reviewStateOf(active.id) : null,
       lastError: this.lastError,
     };
   }
@@ -808,11 +887,21 @@ export class InterestPushWorld implements World {
   }
 
   private loadState(): PersistedState {
+    // 数组与对象必须给出新的，不能只做浅拷贝：`{...EMPTY_STATE}` 会让同一进程里的两个实例
+    // 共用一个 dismissed / pushedIds 数组（一处 push，另一处也变），测试里串得一眼可见。
+    const blank = (): PersistedState => ({
+      ...EMPTY_STATE,
+      dismissed: [],
+      read: [],
+      pushedIds: [],
+      conditional: {},
+      abstractTried: {},
+    });
     try {
       const raw = JSON.parse(readFileSync(this.dataFile('state.json'), 'utf8')) as Partial<PersistedState>;
-      return { ...EMPTY_STATE, ...raw };
+      return { ...blank(), ...raw };
     } catch {
-      return { ...EMPTY_STATE };
+      return blank();
     }
   }
 

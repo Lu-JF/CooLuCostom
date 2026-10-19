@@ -32,6 +32,8 @@ export interface NewsRow {
   unread: boolean;
   /** 源是否给了摘要；没给的条目在列表里标出来，免得点进去才发现。 */
   hasAbstract: boolean;
+  /** 大肥鱼速评摘要（列表里只放评语与总分，没有就是 null）。 */
+  review: { total: number; text: string } | null;
 }
 
 /** 译文状态。 */
@@ -44,6 +46,17 @@ export interface TranslationState {
   /** 数字/单位/缩写可能缺失处的数量，仅作提示。 */
   missing: number;
   reason: string | null;
+}
+
+/** 大肥鱼速评的状态：没评过 = ok:false + reason:'none'；评过就从缓存回。 */
+export interface ReviewState {
+  ok: boolean;
+  text: string;
+  /** 总分 0–10（满分 10 星），一位小数；没分数时 null。 */
+  total: number | null;
+  cached: boolean;
+  reason: string | null;
+  at: number;
 }
 
 /** 兴趣记录的一条：抓到的条目 + 收进来的时间。 */
@@ -94,6 +107,8 @@ export interface InterestPushView {
   records: InterestRecord[];
   active: NewsItem | null;
   translation: TranslationState | null;
+  /** 当前这篇的速评；没评过时 ok:false、reason:'none'。 */
+  review: ReviewState | null;
   /** 最近一次检查的错误原因，null 表示正常。 */
   lastError: string | null;
 }

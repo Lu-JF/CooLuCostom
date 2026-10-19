@@ -36,10 +36,17 @@ export interface InterestText {
     error: (reason: string) => string;
     hint: string;
     abstractPending: (n: number) => string;
+    review: string;
   };
   detail: {
     pick: string;
     overviewTitle: string;
+    reviewTitle: string;
+    reviewAsk: string;
+    reviewNone: string;
+    reviewing: string;
+    reviewFailed: (reason: string) => string;
+    stars: (total: number) => string;
     noAbstractFromSource: string;
     titleOnlyTranslation: string;
     notTranslated: string;
@@ -58,6 +65,7 @@ export interface InterestText {
     translate: string;
     retranslate: string;
     translating: string;
+    translateOk: string;
     cached: string;
     faithful: (n: number) => string;
     openOriginal: string;
@@ -74,6 +82,7 @@ export interface InterestText {
     save: string;
     saved: string;
     checkNow: string;
+    checkNowHint: string;
     pushNow: string;
     checking: string;
     groupPush: string;
@@ -164,10 +173,17 @@ const zh: InterestText = {
     error: (reason) => `上次检查出错：${reason}`,
     hint: '订阅的论文会以气泡对话介绍；详情在这里看。',
     abstractPending: (n) => `另有 ${n} 条源未给摘要（出版社没存），补到才推送，每天重试`,
+    review: '速评',
   },
   detail: {
     pick: '还没有条目。先去「配置」页签点一次检查。',
     overviewTitle: '论文速览',
+    reviewTitle: '大肥鱼速评',
+    reviewAsk: '让大肥鱼评一下',
+    reviewNone: '这篇还没评过',
+    reviewing: '大肥鱼正在看…',
+    reviewFailed: (reason) => `速评失败：${reason}`,
+    stars: (total) => `${total}/10`,
     noAbstractFromSource: '源未提供摘要，可点「打开原文」到出版社页面查看。',
     titleOnlyTranslation: '本条无摘要，译文只有标题。',
     notTranslated: '尚未翻译，点上面的「翻译摘要」。',
@@ -186,6 +202,7 @@ const zh: InterestText = {
     translate: '翻译摘要',
     retranslate: '重新翻译',
     translating: '翻译中…',
+    translateOk: '翻译成功',
     cached: '已用缓存译文',
     faithful: (n) => `译文可能遗漏 ${n} 处数字或缩写，建议对照原文`,
     openOriginal: '打开原文',
@@ -202,6 +219,7 @@ const zh: InterestText = {
     save: '保存',
     saved: '已保存',
     checkNow: '立即检查一次',
+    checkNowHint: '重新抓一遍所有源、回填摘要，约半分钟到一分钟；不用等，可以切到别的页签',
     pushNow: '立刻推一条（试）',
     checking: '正在检查…',
     groupPush: '推送节奏',
@@ -292,10 +310,17 @@ const en: InterestText = {
     error: (reason) => `Last check failed: ${reason}`,
     hint: 'Subscribed papers are introduced in a bubble chat; details live here.',
     abstractPending: (n) => `${n} more have no abstract yet (the publisher never deposited one); retried daily`,
+    review: 'Review',
   },
   detail: {
     pick: 'Nothing yet. Run a check on the Settings tab.',
     overviewTitle: 'Overview',
+    reviewTitle: 'Big Fish take',
+    reviewAsk: 'Let Big Fish rate it',
+    reviewNone: 'Not reviewed yet',
+    reviewing: 'Big Fish is reading…',
+    reviewFailed: (reason) => `Review failed: ${reason}`,
+    stars: (total) => `${total}/10`,
     noAbstractFromSource: 'The source gave no abstract; open the original to read it.',
     titleOnlyTranslation: 'No abstract for this item, so only the title was translated.',
     notTranslated: 'Not translated yet; use Translate above.',
@@ -314,6 +339,7 @@ const en: InterestText = {
     translate: 'Translate',
     retranslate: 'Translate again',
     translating: 'Translating…',
+    translateOk: 'Translated',
     cached: 'from cache',
     faithful: (n) => `translation may miss ${n} numbers or acronyms; compare with the original`,
     openOriginal: 'Open original',
@@ -330,6 +356,7 @@ const en: InterestText = {
     save: 'Save',
     saved: 'Saved',
     checkNow: 'Check now',
+    checkNowHint: 'Re-crawl every source and backfill abstracts; about 30–60 seconds. You do not have to wait.',
     pushNow: 'Push one now (test)',
     checking: 'Checking…',
     groupPush: 'Cadence',

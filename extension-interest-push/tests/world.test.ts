@@ -44,7 +44,12 @@ function makeDeps(log: CallLog): typeof fetch {
     }
     if (url.endsWith('/responses')) {
       log.model += 1;
-      return new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text: '本文提出一种轻量网络，用于变转速下的轴承故障诊断，准确率 99.2%（1200 rpm）。' }] }] }), {
+      // 速评的提示词要求「总分：」，翻译没有：按这个区分两条链路，各回各的形状。
+      const body = String(init?.body ?? '');
+      const text = body.includes('总分：')
+        ? '评价：方法不算新，但把变转速下的实测做扎实了，值得一读。\n总分：7.5'
+        : '本文提出一种轻量网络，用于变转速下的轴承故障诊断，准确率 99.2%（1200 rpm）。';
+      return new Response(JSON.stringify({ output: [{ content: [{ type: 'output_text', text }] }] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -449,5 +454,61 @@ describe('陈旧条目的清理', () => {
     const ids = world.view('zh').items.map((i) => i.id);
     expect(ids).not.toContain('stale001');
     expect(ids).toContain('keep0001');
+  });
+});
+
+describe('大肥鱼速评', () => {
+  it('推送页与列表共用同一份速评，第二次不再花 token', async () => {
+    const { world, host, log } = makeWorld();
+    await world.start(host.asHost());
+    expect(world.view('zh').items[0]!.review).toBeNull();
+    expect(world.view('zh').review?.reason).toBe('none');
+
+    const first = viewOf(await world.invoke('detail', 'review', [], 'zh'));
+    expect(first.review?.ok).toBe(true);
+    expect(first.review?.total).toBe(7.5);
+    expect(first.items[0]!.review?.total).toBe(7.5);
+    expect(first.review?.text).toContain('值得一读');
+
+    const calls = log.model;
+    const again = viewOf(await world.invoke('list', 'review', [first.items[0]!.id], 'zh'));
+    expect(log.model).toBe(calls);
+    expect(again.review?.total).toBe(7.5);
+  });
+
+  it('推送正文先给速评与分数，再给题录', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    await world.invoke('settings', 'pushNow', [], 'zh');
+    const pushed = host.pushed.filter((e) => e.type === 'news.item');
+    const lines = pushed[0]!.text.split('\n');
+    expect(lines[0]).toContain('大肥鱼速评');
+    expect(lines[1]).toContain('速评（大肥鱼，7.5/10）');
+    expect(lines[2]).toContain('标题：Bearing fault diagnosis');
+  });
+
+  it('「立即推一条」推的就是推送页正在看的那篇', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-pushnow-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const base = {
+      doi: null, authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
+      sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract text about bearings.',
+    };
+    const newest = { ...base, id: 'aaaa0001', title: 'Newest paper', issued: '2026-10-18' };
+    const older = { ...base, id: 'bbbb0002', title: 'Older paper', issued: '2026-10-02' };
+    writeFileSync(join(dataDir, 'news', 'items.json'), JSON.stringify([newest, older]));
+
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    expect(world.view('zh').active?.id).toBe('aaaa0001');
+
+    // 换成看另一篇，再点「立刻推一条」：推的必须是这一篇，不能自己另挑。
+    await world.invoke('detail', 'state', ['bbbb0002'], 'zh');
+    await world.invoke('settings', 'pushNow', [], 'zh');
+    const pushed = host.pushed.filter((e) => e.type === 'news.item');
+    expect(pushed).toHaveLength(1);
+    expect(pushed[0]!.senderKey).toBe('bbbb0002');
+    expect(pushed[0]!.text).toContain('标题：Older paper');
   });
 });
