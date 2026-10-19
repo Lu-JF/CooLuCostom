@@ -92,6 +92,7 @@ export interface InterestText {
     arxivCats: string;
     windowDays: string;
     rowsPerJournal: string;
+    journalDelayDays: string;
     mailto: string;
     downloadDir: string;
     requireAbstract: string;
@@ -220,6 +221,7 @@ const zh: InterestText = {
     arxivCats: 'arXiv 分类',
     windowDays: '只看最近多少天',
     rowsPerJournal: '每刊每次取多少条',
+    journalDelayDays: '期刊只抓 N 天前发表的（等摘要长出来）',
     mailto: 'Crossref 邮箱（polite pool）',
     downloadDir: '下载目录（空 = 数据目录下 news/papers）',
     requireAbstract: '只推送有摘要的条目（推荐）',
@@ -347,6 +349,7 @@ const en: InterestText = {
     arxivCats: 'arXiv categories',
     windowDays: 'Only last N days',
     rowsPerJournal: 'Rows per journal',
+    journalDelayDays: 'Skip journal articles newer than N days (let abstracts appear)',
     mailto: 'Crossref mailto (polite pool)',
     downloadDir: 'Download dir (empty = <dataDir>/news/papers)',
     requireAbstract: 'Only push items that have an abstract',

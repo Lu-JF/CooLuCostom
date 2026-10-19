@@ -228,13 +228,16 @@ export async function fetchSemanticScholarAbstracts(dois: string[], deps: FetchD
  * 出错返回空数组；关键词为空时去掉 `query.bibliographic`。
  */
 export async function fetchJournal(
-  input: { issn: string; days: number; rows: number; keywords: string[] },
+  input: { issn: string; days: number; delayDays?: number; rows: number; keywords: string[] },
   deps: FetchDeps,
 ): Promise<NewsItem[]> {
   const doFetch = resolveFetch(deps);
   try {
     const from = daysAgo(input.days);
-    const until = daysAgo(0);
+    // 延迟窗口：这些刊在 Crossref 里基本不给摘要（IEEE/Elsevier 一律空），摘要来自 OpenAlex
+    // 一类抓出版社页面的源，要过几天才抓得到。跳过最近 delayDays 天的文章，等摘要长出来再收。
+    const delay = Math.max(0, Math.floor(input.delayDays ?? 0));
+    const until = daysAgo(delay);
     const params = new URLSearchParams();
     // 按记录创建日期筛与排序：期刊常把期号标到明年，按期号会顶出一堆未来日期。
     params.set('filter', `from-created-date:${from},until-created-date:${until}`);

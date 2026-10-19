@@ -54,6 +54,22 @@ describe('fetchJournal', () => {
     expect(url.searchParams.get('mailto')).toBe('me@example.com');
   });
 
+  it('给了延迟天数就跳过最近 N 天创建的文章', async () => {
+    let captured = '';
+    const deps: FetchDeps = {
+      mailto: 'me@example.com',
+      fetchImpl: (async (url: string) => {
+        captured = String(url);
+        return mockResponse({ message: { items: [] } });
+      }) as unknown as typeof fetch,
+    };
+    await fetchJournal({ issn: '0278-0046', days: 30, delayDays: 14, rows: 50, keywords: [] }, deps);
+    const url = new URL(captured);
+    const until = url.searchParams.get('filter')?.split('until-created-date:')[1] ?? '';
+    const expected = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+    expect(until).toBe(expected);
+  });
+
   it('关键词为空时去掉 query.bibliographic', async () => {
     let captured = '';
     const deps: FetchDeps = {

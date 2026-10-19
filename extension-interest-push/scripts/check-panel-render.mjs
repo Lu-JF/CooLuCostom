@@ -217,6 +217,7 @@ try {
   check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
   check('术语表按行增删（英文 / 中文两格），且标签里没有「每行」说明', cfg.termRows >= 30 && cfg.termCols === 2 && !cfg.hasPerLineHint, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
   check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
+  check('有「期刊延迟窗口」字段', cfg.text.includes('期刊只抓'), '');
   check('每组各有「保存本组」', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');

@@ -46,6 +46,12 @@ export interface InterestPushConfigSection {
   windowDays: number;
   /** 每次每刊取多少条。 */
   rowsPerJournal: number;
+  /**
+   * 期刊的「等摘要」延迟天数：跳过最近 N 天发表的文章。
+   * IEEE/Elsevier 这些刊在 Crossref 里从不给摘要，摘要要等 OpenAlex 一类源去抓（几天到几周），
+   * 因此晚几天再收，收到的就大多带摘要。arXiv 与每日论文榜不受影响（它们本就带摘要）。
+   */
+  journalDelayDays: number;
   /** CrossRef 的 polite pool 邮箱。 */
   mailto: string;
   /** 下载目录；空表示 `<dataDir>/news/papers`。 */
@@ -79,6 +85,7 @@ export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
   arxivCats: ['eess.SP', 'eess.AS'],
   windowDays: 30,
   rowsPerJournal: 50,
+  journalDelayDays: 14,
   mailto: 'research@example.com',
   downloadDir: '',
   requireAbstract: true,

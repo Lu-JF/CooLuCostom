@@ -259,7 +259,11 @@ Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定�
 ### 摘要：来源侧的实情与处理
 
 - **Crossref 里没有就是没有**：抽 IEEE TIE/TIM、Measurement、EAAI、ESWA、Neural Networks 的新文章直接问
-  `/works/<doi>`，`abstract` 字段为空——出版社没交存，不是取数写错了。
+  `/works/<doi>`，`abstract` 字段为空——出版社没交存，不是取数写错了。**而且不是「只有最新发表才没有」**：
+  把 window 挪到 3 个月前、10 个月前，甚至 2024 年 1—3 月，这几家刊仍是 0/25 —— 返回字段里根本没有 `abstract`。
+  同一年份的文章在 **OpenAlex 里却有倒排索引**（实测 2/2），说明摘要来自抓出版社页面的第三方源，而它们需要时间。
+  这直接推出了「期刊延迟窗口」这个设置：跳过最近 N 天发表的文章，等摘要长出来再收（默认 14 天）。
+  实测把列表从 54 条（37 条无摘要，68%）变成 17 条、无摘要 0 条；抓取量 187 → 120 条。
 - **OpenAlex 的免费额度按 IP 共享**：打多了会返回
   `Rate limit exceeded … ($0 remaining; resets at midnight UTC)`；Semantic Scholar 无 key 会 429。
   两个的 key 都免费，可放进 `OPENALEX_API_KEY` / `S2_API_KEY`（环境变量，不落盘）。

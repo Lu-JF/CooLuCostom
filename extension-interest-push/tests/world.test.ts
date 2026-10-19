@@ -323,6 +323,29 @@ describe('只推有摘要的条目', () => {
   });
 });
 
+describe('期刊延迟窗口', () => {
+  it('太年轻又没摘要的期刊条目会从名单里清掉，够老或已有摘要的留下', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-delay-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const base = {
+      doi: '10.1/x', authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      tier: 't', url: 'https://doi.org/10.1/x', pdfUrl: null, source: 'crossref' as const,
+      sourceDetail: 'crossref:0263-2241?created:2026-09-01', foundAt: 1,
+    };
+    const young = { ...base, id: 'young001', title: 'Too fresh and no abstract', abstract: '', issued: '2026-10-18' };
+    const old = { ...base, id: 'old00001', title: 'Old enough, still no abstract', abstract: '', issued: '2026-08-01' };
+    const youngWithAbstract = { ...base, id: 'young002', title: 'Fresh but has an abstract', abstract: 'We propose...', issued: '2026-10-18' };
+    writeFileSync(join(dataDir, 'news', 'items.json'), JSON.stringify([young, old, youngWithAbstract]));
+
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    const ids = world.view('zh').items.map((i) => i.id);
+    expect(ids).not.toContain('young001');       // 年轻 + 无摘要 → 等摘要，先不出现在名单里
+    expect(ids).toContain('old00001');           // 够老 → 留着当线索
+    expect(ids).toContain('young002');           // 有摘要 → 立刻可用
+  });
+});
+
 describe('配置保存', () => {
   it('越界与非法值被夹紧后一次写回', async () => {
     const { world, host, cfg, patches } = makeWorld();
@@ -341,6 +364,7 @@ describe('配置保存', () => {
         arxivCats: 'eess.SP, ',
         windowDays: 0,
         rowsPerJournal: 9999,
+        journalDelayDays: 500,
         mailto: 'me@example.org',
         downloadDir: '',
       },
@@ -356,6 +380,7 @@ describe('配置保存', () => {
     expect(cfg.journals[0]!.label).toBe('Measurement');
     expect(cfg.windowDays).toBe(1);
     expect(cfg.rowsPerJournal).toBe(200);
+    expect(cfg.journalDelayDays).toBe(120);
     expect(cfg.arxivCats).toEqual(['eess.SP']);
   });
 });

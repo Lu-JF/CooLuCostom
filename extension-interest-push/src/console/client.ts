@@ -597,6 +597,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   });
   const windowInput = numberInput(ui, '30');
   const rowsInput = numberInput(ui, '50');
+  const delayInput = numberInput(ui, '14', '4.5em');
   const mailtoInput = ui.input({ placeholder: 'name@example.org' });
   const dirInput = ui.input({ placeholder: '' });
   const dirBar = ui.h('div', 'ip-inline');
@@ -617,7 +618,11 @@ function mountSettings(ctx: ConsolePanelContext): void {
     }),
   );
   const sourceNumbers = ui.h('div', 'ip-fields');
-  sourceNumbers.append(fieldRow(ui, t.settings.windowDays, windowInput), fieldRow(ui, t.settings.rowsPerJournal, rowsInput));
+  sourceNumbers.append(
+    fieldRow(ui, t.settings.windowDays, windowInput),
+    fieldRow(ui, t.settings.rowsPerJournal, rowsInput),
+    fieldRow(ui, t.settings.journalDelayDays, delayInput),
+  );
   const sourcesSave = ui.button(t.settings.saveSection, { variant: 'primary', size: 'sm', onClick: () => void saveCard('sources') });
   const sourcesFoot = ui.rowbar();
   sourcesFoot.append(sourcesSave);
@@ -723,6 +728,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     arxivCats: uniqSorted(catsEditor.values()),
     windowDays: Number(windowInput.value),
     rowsPerJournal: Number(rowsInput.value),
+    journalDelayDays: Number(delayInput.value),
     mailto: mailtoInput.value.trim(),
     downloadDir: dirInput.value.trim(),
     requireAbstract: abstractBox.checked,
@@ -789,6 +795,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     setNum(roundsInput, c.maxRounds);
     setNum(windowInput, c.windowDays);
     setNum(rowsInput, c.rowsPerJournal);
+    setNum(delayInput, c.journalDelayDays);
     abstractBox.setChecked(c.requireAbstract);
     if (document.activeElement !== mailtoInput) mailtoInput.value = c.mailto;
     if (document.activeElement !== dirInput) dirInput.value = c.downloadDir;

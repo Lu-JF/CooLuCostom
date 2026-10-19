@@ -304,7 +304,16 @@ export class InterestPushWorld implements World {
     const tierOf = new Map<string, JournalEntry>(cfg.journals.map((j) => [j.issn, j]));
     const jobs: Array<() => Promise<NewsItem[]>> = [
       ...cfg.journals.map((j) => () =>
-        fetchJournal({ issn: j.issn, days: cfg.windowDays, rows: cfg.rowsPerJournal, keywords: cfg.keywords }, deps).then((list) =>
+        fetchJournal(
+          {
+            issn: j.issn,
+            days: cfg.windowDays,
+            delayDays: cfg.journalDelayDays,
+            rows: cfg.rowsPerJournal,
+            keywords: cfg.keywords,
+          },
+          deps,
+        ).then((list) =>
           list.map((item) => ({ ...item, tier: item.tier ?? tierOf.get(j.issn)?.tier ?? null, journal: item.journal || j.label })),
         ),
       ),
@@ -385,10 +394,20 @@ export class InterestPushWorld implements World {
 
   private merge(found: NewsItem[]): void {
     const fresh: NewsItem[] = [];
-    // 早先抓进来的 HF 条目按旧规则放行过：按现在的相关性规则重新过一遍，不相关的清掉。
+    // 名单先过两道筛：与研究方向无关的 HF 条目清掉；期刊里「还没到延迟窗口又没摘要」的也清掉
+    // （设置里既然说了等摘要，就不该把刚发表、摘要还没长出来的摆在列表里）。
+    const delay = Math.max(0, Math.floor(this.opts.cfg.journalDelayDays));
+    const today = this.now();
+    const stillWaiting = (i: NewsItem): boolean => {
+      if (i.source !== 'crossref' || i.abstract.trim() !== '' || delay <= 0) return false;
+      const issued = Date.parse(`${i.issued}T00:00:00Z`);
+      if (!Number.isFinite(issued)) return false;
+      return (today - issued) / 86_400_000 < delay;
+    };
     const byId = new Map(
       this.items
         .filter((i) => i.source !== 'hf' || relevant(`${i.title} ${i.abstract}`, this.opts.cfg.keywords))
+        .filter((i) => !stillWaiting(i))
         .map((i) => [i.id, i]),
     );
     let improved = 0;
@@ -609,6 +628,7 @@ export class InterestPushWorld implements World {
         arxivCats: [...cfg.arxivCats],
         windowDays: cfg.windowDays,
         rowsPerJournal: cfg.rowsPerJournal,
+        journalDelayDays: cfg.journalDelayDays,
         mailto: cfg.mailto,
         downloadDir: cfg.downloadDir,
         requireAbstract: cfg.requireAbstract,
@@ -770,6 +790,7 @@ export class InterestPushWorld implements World {
         .slice(0, 20),
       windowDays: num(raw.windowDays, 1, 365, cfg.windowDays),
       rowsPerJournal: num(raw.rowsPerJournal, 5, 200, cfg.rowsPerJournal),
+      journalDelayDays: num(raw.journalDelayDays, 0, 120, cfg.journalDelayDays),
       mailto: String(raw.mailto ?? cfg.mailto).trim() || cfg.mailto,
       downloadDir: String(raw.downloadDir ?? cfg.downloadDir).trim(),
       requireAbstract: typeof raw.requireAbstract === 'boolean' ? raw.requireAbstract : cfg.requireAbstract,

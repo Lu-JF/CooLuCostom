@@ -76,6 +76,7 @@ export interface InterestPushView {
     arxivCats: string[];
     windowDays: number;
     rowsPerJournal: number;
+    journalDelayDays: number;
     mailto: string;
     downloadDir: string;
     requireAbstract: boolean;
