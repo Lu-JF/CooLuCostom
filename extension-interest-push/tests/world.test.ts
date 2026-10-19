@@ -311,7 +311,8 @@ describe('控制台声明', () => {
     expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'settings']);
     expect(decl.promptDocs?.[0]?.role).toBe('envPrompt');
     expect(decl.lamps?.length).toBe(3);
-    expect(decl.badges?.[0]?.label).toBe('未读');
+    // 选项卡上方不再有「未读」标签（列表里已读的才标）。
+    expect(decl.badges?.map((b) => b.label)).toEqual(['期刊', '关键词', '已暂停']);
     expect(world.envPromptVars()['interest-push.status']).toContain('今日推送');
   });
 });

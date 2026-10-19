@@ -4,30 +4,43 @@
   font-size: 12px;
 }
 
-/* ---- 详情 */
-.ip-title-lg {
-  font-size: 15px;
+/* ---- 详情：论文速览与译文 */
+.ip-ov-title {
+  font-size: 15.5px;
+  font-weight: 600;
   line-height: 1.45;
 }
 
-.ip-abstract,
-.ip-translation {
-  max-height: 300px;
-  overflow: auto;
-}
-
-.ip-tr-title {
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.ip-tr {
-  margin: 0;
-  white-space: pre-wrap;
-  font-family: inherit;
+.ip-ov-abstract {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ip-muted {
+  color: var(--muted-foreground);
+}
+
+/* 空态提示：默认那套是居中且上下留 30px，这里靠左、收紧，免得整张卡空一半 */
+.ip-ov-abstract .placeholder,
+.ip-translation .placeholder {
+  text-align: left;
+  padding: 4px 0;
+}
+
+/* 详情卡：键列缩到内容宽（width:1px + nowrap 的经典写法），值列紧跟其后，去掉中间的空白 */
+.ip-detail .kvtable td:first-child {
+  width: 1px;
+  white-space: nowrap;
+  padding-right: 16px;
+}
+
+.ip-detail .kvtable td:last-child {
+  word-break: break-word;
 }
 
 /* ---- 列表 */
@@ -145,6 +158,14 @@
   font-size: 11px;
 }
 
+/* ---- 单独占一行的字段（星期） */
+.ip-row-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+}
+
 /* ---- 星期按钮 */
 .ip-week {
   display: inline-flex;
@@ -168,8 +189,6 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 320px;
-  overflow: auto;
 }
 
 .ip-jrow {

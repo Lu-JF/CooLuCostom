@@ -123,7 +123,6 @@ export class InterestPushWorld implements World {
 
   console(language: Language = 'zh'): WorldConsoleDecl {
     const t = interestText(language);
-    const unread = this.items.filter((i) => !this.state.read.includes(i.id)).length;
     const paused = this.opts.cfg.pausedUntil > this.now();
     const nextWindow = this.nextWindowAt();
     return {
@@ -150,7 +149,6 @@ export class InterestPushWorld implements World {
         },
       ],
       badges: [
-        { label: t.badges.unread, value: unread, tone: unread > 0 ? 'on' : 'plain' },
         { label: t.badges.journals, value: this.opts.cfg.journals.length, tone: 'plain' },
         { label: t.badges.keywords, value: this.opts.cfg.keywords.length, tone: 'plain' },
         { label: t.badges.paused, value: paused ? 'on' : 'off', tone: paused ? 'off' : 'plain' },

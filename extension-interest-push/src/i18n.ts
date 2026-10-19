@@ -3,7 +3,15 @@ import type { Language } from 'cortico/core/language.ts';
 
 export interface InterestText {
   label: string;
-  panel: { listTitle: string; listDesc: string; detailTitle: string; detailDesc: string; settingsTitle: string; settingsDesc: string };
+  panel: {
+    listTitle: string;
+    listDesc: string;
+    detailTitle: string;
+    detailDesc: string;
+    detailCardTitle: string;
+    settingsTitle: string;
+    settingsDesc: string;
+  };
   lamps: {
     check: string;
     checkNone: string;
@@ -28,7 +36,10 @@ export interface InterestText {
   };
   detail: {
     pick: string;
-    paperTitle: string;
+    overviewTitle: string;
+    noAbstractFromSource: string;
+    titleOnlyTranslation: string;
+    notTranslated: string;
     refresh: string;
     next: string;
     authors: string;
@@ -115,8 +126,9 @@ const zh: InterestText = {
   panel: {
     listTitle: '列表',
     listDesc: '最近抓到的论文；点一条看详情。',
-    detailTitle: '详情',
-    detailDesc: '标题、作者、期刊、摘要、爬取源与译文。',
+    detailTitle: '推送',
+    detailDesc: '论文标题与摘要、中文译文、详情与爬取源。',
+    detailCardTitle: '详情',
     settingsTitle: '配置',
     settingsDesc: '推送节奏、关键词、期刊集合与翻译术语表；填完点保存。',
   },
@@ -144,7 +156,10 @@ const zh: InterestText = {
   },
   detail: {
     pick: '还没有条目。先去「配置」页签点一次检查。',
-    paperTitle: '论文标题',
+    overviewTitle: '论文速览',
+    noAbstractFromSource: '源未提供摘要，可点「打开原文」到出版社页面查看。',
+    titleOnlyTranslation: '本条无摘要，译文只有标题。',
+    notTranslated: '尚未翻译，点上面的「翻译摘要」。',
     refresh: '刷新',
     next: '换一篇',
     authors: '作者',
@@ -194,7 +209,7 @@ const zh: InterestText = {
     rowsPerJournal: '每刊每次取多少条',
     mailto: 'Crossref 邮箱（polite pool）',
     downloadDir: '下载目录（空 = 数据目录下 news/papers）',
-    glossary: '翻译术语表（每行「英文 | 中文」）',
+    glossary: '翻译术语表',
     addJournal: '增加一行',
     remove: '删除',
     groupTags: '点右侧「✕」删掉，用下面的菜单或输入框增加',
@@ -231,8 +246,9 @@ const en: InterestText = {
   panel: {
     listTitle: 'List',
     listDesc: 'Recently crawled papers; open one for details.',
-    detailTitle: 'Detail',
-    detailDesc: 'Title, authors, venue, abstract, crawl source and translation.',
+    detailTitle: 'Feed',
+    detailDesc: 'Title and abstract, Chinese translation, details and crawl source.',
+    detailCardTitle: 'Details',
     settingsTitle: 'Settings',
     settingsDesc: 'Cadence, keywords, journal set and translation glossary; press Save when done.',
   },
@@ -260,7 +276,10 @@ const en: InterestText = {
   },
   detail: {
     pick: 'Nothing yet. Run a check on the Settings tab.',
-    paperTitle: 'Title',
+    overviewTitle: 'Overview',
+    noAbstractFromSource: 'The source gave no abstract; open the original to read it.',
+    titleOnlyTranslation: 'No abstract for this item, so only the title was translated.',
+    notTranslated: 'Not translated yet; use Translate above.',
     refresh: 'Refresh',
     next: 'Next paper',
     authors: 'Authors',
@@ -310,7 +329,7 @@ const en: InterestText = {
     rowsPerJournal: 'Rows per journal',
     mailto: 'Crossref mailto (polite pool)',
     downloadDir: 'Download dir (empty = <dataDir>/news/papers)',
-    glossary: 'Translation glossary (one "en | zh" per line)',
+    glossary: 'Translation glossary',
     addJournal: 'Add row',
     remove: 'Remove',
     groupTags: 'Click ✕ to remove; add with the menu or box below',

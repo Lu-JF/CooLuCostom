@@ -104,22 +104,31 @@ try {
   await page.waitForSelector('#kernel-root', { timeout: 30_000 });
 
   // ---- 详情页签（现在排第一）
-  const detailOk = await openPanel('detail', '.ip-title-lg');
-  check('详情页签排第一且挂上了', detailOk);
+  const detailOk = await openPanel('detail', '.ip-ov-title');
+  check('推送页签排第一且挂上了', detailOk);
   await page.waitForFunction(() => (document.querySelector('.ip-detail')?.querySelectorAll('tr').length ?? 0) >= 5, null, { timeout: 40_000 }).catch(() => {});
   const detail = await page.evaluate(() => ({
     text: document.body.textContent ?? '',
-    title: document.querySelector('.ip-title-lg')?.textContent ?? '',
+    title: document.querySelector('.ip-ov-title')?.textContent ?? '',
     kv: [...document.querySelectorAll('.ip-detail tr')].map((tr) => tr.textContent ?? ''),
-    hasAbstract: (document.querySelector('.ip-abstract')?.textContent ?? '').length > 40,
+    abstract: document.querySelector('.ip-ov-abstract')?.textContent ?? '',
+    kvFirstColWidth: document.querySelector('.ip-detail .kvtable td:first-child')?.getBoundingClientRect().width ?? 0,
+    translateBelowAbstract: (() => {
+      const btn = [...document.querySelectorAll('button')].find((b) => (b.textContent ?? '').includes('翻译'));
+      const abs = document.querySelector('.ip-ov-abstract');
+      if (!btn || !abs) return false;
+      return btn.getBoundingClientRect().top >= abs.getBoundingClientRect().bottom - 2;
+    })(),
+    kvTableWidth: document.querySelector('.ip-detail .kvtable')?.getBoundingClientRect().width ?? 0,
     buttons: [...document.querySelectorAll('button')].map((b) => (b.textContent ?? '').trim()),
     selects: document.querySelectorAll('select').length,
     order: [...document.querySelectorAll('.sheet h3')].map((h) => (h.childNodes[0]?.textContent ?? '').trim()),
   }));
   check('详情给出期刊/上线/作者/团队/DOI/爬取源', ['期刊', '上线', '作者', '团队', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 4)).join(','));
-  check('从上到下是标题、原文摘要、中文译文、详情', JSON.stringify(detail.order.slice(0, 4)) === JSON.stringify(['论文标题', '原文摘要', '中文译文', '详情']), detail.order.slice(0, 4).join(' → '));
-  check('标题与摘要都画出来了', detail.title.length > 10, detail.title.slice(0, 54));
-  check('翻译按钮在原文摘要旁边', detail.buttons.some((b) => b === '翻译摘要' || b === '重新翻译'), detail.buttons.filter((b) => b.includes('翻译')).join('/'));
+  check('从上到下是论文速览、中文译文、详情卡', JSON.stringify(detail.order.slice(0, 3)) === JSON.stringify(['论文速览', '中文译文', '详情']), detail.order.slice(0, 3).join(' → '));
+  check('速览里标题与摘要都有内容', detail.title.length > 10 && detail.abstract.length >= 10, `${detail.title.slice(0, 34)} … / ${detail.abstract.slice(0, 34)}`);
+  check('详情卡键列不再占固定宽度', detail.kvTableWidth === 0 || detail.kvFirstColWidth / detail.kvTableWidth < 0.3, `键列 ${Math.round(detail.kvFirstColWidth)}px / 表宽 ${Math.round(detail.kvTableWidth)}px`);
+  check('翻译按钮在速览卡里，且位于摘要下方', detail.translateBelowAbstract, detail.buttons.filter((b) => b.includes('翻译')).join('/'));
   check('顶部有刷新与换一篇', detail.buttons.includes('刷新') && detail.buttons.includes('换一篇'), '');
   check('已取消下拉列表切换', detail.selects === 0, `${detail.selects} 个下拉`);
   check('详情卡里有打开原文与下载', detail.buttons.includes('打开原文') && detail.buttons.includes('下载原文'), '');
@@ -173,19 +182,26 @@ try {
       pickPath: (text.match(/选择…/g) ?? []).length,
       journalHead: document.querySelector('.ip-gridhead')?.textContent ?? '',
       hasTierBasisColumn: /分区依据/.test(text),
+      hasPerLineHint: /每行/.test(text),
+      timeHas1015: [...document.querySelectorAll('select')].some((sel) => [...sel.options].some((o) => o.value === '10:15')),
+      weekInOwnRow: document.querySelector('.ip-week')?.parentElement?.classList.contains('ip-row-block') ?? false,
+      gridClipped: [...document.querySelectorAll('.ip-gridbody')].some((el) => el.scrollHeight > el.clientHeight + 2 || getComputedStyle(el).overflow === 'auto'),
+      bodyUnread: /未读/.test(document.body.textContent ?? ''),
     };
   });
   check('四组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
   check('节奏字段齐（间隔/上限/轮次/时刻/静默/星期/暂停到）', ['检查间隔', '每天最多几条', '对话轮次上限', '推送时刻', '静默时段', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
   check('推送时刻与关键词是标签', cfg.tags.length >= 8 && cfg.tags.includes('10:30') && cfg.tags.some((x) => x.includes('bearing')), cfg.tags.slice(0, 6).join(' / '));
-  check('时间用下拉菜单选', cfg.selects >= 2, `${cfg.selects} 个菜单`);
-  check('星期是 1-7 的按钮且默认全亮', cfg.weekCount === 7 && cfg.weekOn === 7, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个`);
+  check('时间用下拉菜单选，且能选到 10:15', cfg.selects >= 2 && cfg.timeHas1015, `${cfg.selects} 个菜单，含 10:15：${cfg.timeHas1015}`);
+  check('星期是 1-7 的按钮、默认全亮、单独一行', cfg.weekCount === 7 && cfg.weekOn === 7 && cfg.weekInOwnRow, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个，独占一行：${cfg.weekInOwnRow}`);
   check('期刊表有表头且第四列已取消', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区标签/.test(cfg.journalHead) && /分组/.test(cfg.journalHead) && !cfg.hasTierBasisColumn, cfg.journalHead.trim().slice(0, 40));
   check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
-  check('术语表按行增删（英文 / 中文两格）', cfg.termRows >= 30 && cfg.termCols === 2, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
+  check('术语表按行增删（英文 / 中文两格），且标签里没有「每行」说明', cfg.termRows >= 30 && cfg.termCols === 2 && !cfg.hasPerLineHint, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
   check('每组各有「保存本组」', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
+  check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');
   check('下载目录带本机选择器', cfg.pickPath >= 1, `${cfg.pickPath} 个`);
+  check('页面里已无「未读」字样', !cfg.bodyUnread, cfg.bodyUnread ? '还看得到' : '');
 
   const ownFailed = failedUrls.filter((u) => !/api\.github\.com|api\/framework\/release/.test(u));
   check('面板相关资源没有失败', ownFailed.length === 0, ownFailed.slice(0, 2).join(' / '));
@@ -208,7 +224,7 @@ try {
         console.log(`  截图（${panel}）没拍成：${err instanceof Error ? err.message : String(err)}`);
       }
     };
-    await shoot('detail', '.ip-title-lg', `${prefix}-detail.png`, 1600);
+    await shoot('detail', '.ip-ov-title', `${prefix}-detail.png`, 1600);
     await shoot('list', '.ip-list', `${prefix}-list.png`, 1100);
     await shoot('settings', '.ip-gridhead', `${prefix}-settings.png`, 2400);
   }

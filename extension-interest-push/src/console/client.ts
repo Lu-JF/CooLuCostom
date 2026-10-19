@@ -34,8 +34,8 @@ const localDateValue = (ms: number): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** 00:00 到 23:30，半小时一档。 */
-const TIME_OPTIONS: string[] = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 === 0 ? '00' : '30'}`);
+/** 00:00 到 23:45，一刻钟一档（能设 10:15 这类时刻）。 */
+const TIME_OPTIONS: string[] = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`);
 
 /** 页签之间的跳转：控制台是 hash 路由，切失败就留在原地（本页仍能用）。 */
 function switchPanel(ctx: ConsolePanelContext, panelId: string): void {
@@ -225,13 +225,11 @@ function mountDetail(ctx: ConsolePanelContext): void {
   top.append(refreshBtn, nextBtn, note);
   ctx.root.appendChild(top);
 
-  const titleCard = ui.sheet({ title: t.detail.paperTitle });
-  const titleBody = ui.h('div', 'ip-title-lg');
-  titleCard.body.appendChild(titleBody);
-
-  const abstractCard = ui.sheet({ title: t.detail.abstract });
-  const abstractBar = ui.rowbar();
-  const abstractBody = ui.h('div', 'ip-abstract');
+  // 标题与摘要合成一张「论文速览」：标题一行醒目，摘要一段浅色，中间留一口气。
+  const overviewCard = ui.sheet({ title: t.detail.overviewTitle });
+  const overviewBar = ui.rowbar();
+  const titleBody = ui.h('div', 'ip-ov-title');
+  const abstractBody = ui.h('div', 'ip-ov-abstract');
   const translateBtn = ui.button(t.detail.translate, {
     size: 'sm',
     onClick: () => {
@@ -250,55 +248,69 @@ function mountDetail(ctx: ConsolePanelContext): void {
       })();
     },
   });
-  abstractBar.append(translateBtn);
-  abstractCard.body.append(abstractBar, abstractBody);
+  overviewBar.append(translateBtn);
+  // 标题 → 摘要 → 翻译按钮：按钮就落在原文与译文之间，符合阅读顺序。
+  overviewCard.body.append(titleBody, abstractBody, overviewBar);
 
+  // 译文与原文同构：标题一行、摘要一段。
   const translationCard = ui.sheet({ title: t.detail.translation });
-  const translationBody = ui.h('div', 'ip-translation');
-  translationCard.body.appendChild(translationBody);
+  const translatedTitle = ui.h('div', 'ip-ov-title');
+  const translationBody = ui.h('div', 'ip-ov-abstract ip-tr');
+  translationCard.body.append(translatedTitle, translationBody);
 
-  const detailCard = ui.sheet({ title: t.panel.detailTitle });
+  const detailCard = ui.sheet({ title: t.panel.detailCardTitle });
   const detailBody = ui.h('div', 'ip-detail');
   const actionBar = ui.rowbar();
   detailCard.body.append(detailBody, actionBar);
 
-  ctx.root.append(titleCard.el, abstractCard.el, translationCard.el, detailCard.el);
+  ctx.root.append(overviewCard.el, translationCard.el, detailCard.el);
 
   function render(): void {
     const v = view;
     const item = v?.active ?? null;
     note.textContent = v ? `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)} · ${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}` : '';
     titleBody.textContent = item?.title ?? '';
-    abstractBody.textContent = item ? (item.abstract || t.detail.none) : '';
+    const hasAbstract = (item?.abstract ?? '').trim() !== '';
+    abstractBody.textContent = item ? (hasAbstract ? item.abstract : t.detail.noAbstractFromSource) : '';
+    abstractBody.classList.toggle('ip-muted', item !== null && !hasAbstract);
     detailBody.replaceChildren();
     actionBar.replaceChildren();
+    translatedTitle.replaceChildren();
     translationBody.replaceChildren();
     translateBtn.textContent = v?.translation?.text ? t.detail.retranslate : t.detail.translate;
     translateBtn.disabled = item === null;
     nextBtn.disabled = (v?.items.length ?? 0) <= 1;
     if (!item) {
       titleBody.textContent = t.detail.pick;
-      abstractCard.el.hidden = true;
+      overviewCard.el.hidden = false;
+      abstractBody.textContent = '';
       translationCard.el.hidden = true;
       detailCard.el.hidden = true;
       return;
     }
-    abstractCard.el.hidden = false;
+    overviewCard.el.hidden = false;
     translationCard.el.hidden = false;
     detailCard.el.hidden = false;
 
     const tr = v?.translation ?? null;
-    if (tr?.ok && tr.text) {
-      if (tr.title !== null && tr.title !== '') translationBody.appendChild(ui.h('div', 'ip-tr-title', tr.title));
-      translationBody.appendChild(ui.h('pre', 'ip-tr', tr.text));
+    if (tr?.ok && (tr.title || tr.text)) {
+      translatedTitle.textContent = tr.title ?? '';
+      translatedTitle.hidden = (tr.title ?? '') === '';
+      translationBody.textContent = tr.text ?? '';
+      translationBody.hidden = (tr.text ?? '') === '';
+      if (tr.title && !hasAbstract) translationBody.appendChild(ui.msgline(t.detail.titleOnlyTranslation));
       const bits: string[] = [];
       if (tr.cached) bits.push(t.detail.cached);
       if (tr.missing > 0) bits.push(t.detail.faithful(tr.missing));
-      if (bits.length > 0) translationBody.appendChild(ui.msgline(bits.join(' · '), tr.missing > 0));
+      if (bits.length > 0) translationCard.el.appendChild(ui.msgline(bits.join(' · '), tr.missing > 0));
     } else if (tr && !tr.ok) {
+      translationBody.hidden = false;
+      translationBody.textContent = '';
       translationBody.appendChild(ui.msgline(t.detail.failed(String(tr.reason ?? '')), true));
     } else {
-      translationBody.appendChild(ui.placeholder(t.detail.translate));
+      translationBody.hidden = false;
+      translationBody.textContent = '';
+      translationBody.appendChild(ui.placeholder(t.detail.notTranslated));
     }
 
     detailBody.appendChild(
@@ -509,6 +521,9 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const quietEnd = timeSelect(ui, '08:30', () => {});
   quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart), fieldRow(ui, t.settings.quietEnd, quietEnd));
   const week = weekdayButtons(ui);
+  // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
+  const weekRow = ui.h('div', 'ip-row-block');
+  weekRow.append(ui.h('span', 'ip-fieldlabel', t.settings.pushDays), week.el);
   const pauseRow = ui.h('div', 'ip-fields');
   const pauseDate = ui.input({ type: 'date' });
   const resumeBtn = ui.button(t.settings.resumNow, { size: 'sm', onClick: () => { pauseDate.value = ''; } });
@@ -521,7 +536,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     fieldRow(ui, t.settings.pushTimes, ui.h('div')),
     pushTimesEditor.el,
     fieldRow(ui, t.settings.quiet, quietRow),
-    fieldRow(ui, t.settings.pushDays, week.el),
+    weekRow,
     pauseRow,
     cadenceFoot,
   );
@@ -756,7 +771,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
       `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)}`,
       `${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, c.dailyCap)}`,
       `${t.lamps.next} ${v.schedule.paused ? t.lamps.nextPaused : fmtTime(v.schedule.nextCheckAt)}`,
-      `${t.badges.unread} ${v.items.filter((i) => i.unread).length}`,
     ].join(' · ');
   }
 

@@ -178,6 +178,8 @@ check(
   ipWorld?.status === 'active' && (ipWorld.lamps ?? []).length === 3,
   ipWorld ? `status=${ipWorld.status} lamps=${(ipWorld.lamps ?? []).length} badges=${(ipWorld.badges ?? []).length}` : '没有 interest-push',
 );
+const ipBadges = (ipWorld?.badges ?? []).map((b) => String(b.label ?? ''));
+check('选项卡上方不再有「未读」标签', !ipBadges.includes('未读'), ipBadges.join(' / ') || '（无标签）');
 
 const ipPanel = await post(`${panelBase}/world%3Ainterest-push/panels/list/state`, { args: [] });
 const ipView = ipPanel.json?.view ?? ipPanel.json;
