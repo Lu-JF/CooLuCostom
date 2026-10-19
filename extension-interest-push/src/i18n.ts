@@ -9,6 +9,8 @@ export interface InterestText {
     detailTitle: string;
     detailDesc: string;
     detailCardTitle: string;
+    recordsTitle: string;
+    recordsDesc: string;
     settingsTitle: string;
     settingsDesc: string;
   };
@@ -33,6 +35,7 @@ export interface InterestText {
     dismissed: string;
     error: (reason: string) => string;
     hint: string;
+    abstractPending: (n: number) => string;
   };
   detail: {
     pick: string;
@@ -40,6 +43,8 @@ export interface InterestText {
     noAbstractFromSource: string;
     titleOnlyTranslation: string;
     notTranslated: string;
+    record: string;
+    recorded: string;
     refresh: string;
     next: string;
     authors: string;
@@ -64,6 +69,7 @@ export interface InterestText {
     none: string;
     dismissedNote: string;
   };
+  records: { empty: string };
   settings: {
     save: string;
     saved: string;
@@ -88,6 +94,7 @@ export interface InterestText {
     rowsPerJournal: string;
     mailto: string;
     downloadDir: string;
+    requireAbstract: string;
     glossary: string;
     addJournal: string;
     remove: string;
@@ -129,6 +136,8 @@ const zh: InterestText = {
     detailTitle: '推送',
     detailDesc: '论文标题与摘要、中文译文、详情与爬取源。',
     detailCardTitle: '详情',
+    recordsTitle: '兴趣记录',
+    recordsDesc: '你收进来的条目，按收藏时间倒序；可以打开原文或移除。',
     settingsTitle: '配置',
     settingsDesc: '推送节奏、关键词、期刊集合与翻译术语表；填完点保存。',
   },
@@ -153,6 +162,7 @@ const zh: InterestText = {
     dismissed: '不再推送',
     error: (reason) => `上次检查出错：${reason}`,
     hint: '订阅的论文会以气泡对话介绍；详情在这里看。',
+    abstractPending: (n) => `另有 ${n} 条源未给摘要（出版社没存），补到才推送，每天重试`,
   },
   detail: {
     pick: '还没有条目。先去「配置」页签点一次检查。',
@@ -160,6 +170,8 @@ const zh: InterestText = {
     noAbstractFromSource: '源未提供摘要，可点「打开原文」到出版社页面查看。',
     titleOnlyTranslation: '本条无摘要，译文只有标题。',
     notTranslated: '尚未翻译，点上面的「翻译摘要」。',
+    record: '收进兴趣记录',
+    recorded: '已在兴趣记录里',
     refresh: '刷新',
     next: '换一篇',
     authors: '作者',
@@ -184,6 +196,7 @@ const zh: InterestText = {
     none: '—',
     dismissedNote: '你标记过不再推送这一条，它只是留在列表里。',
   },
+  records: { empty: '还没有收进来的条目。在「推送」页看到想留的，点「收进兴趣记录」。' },
   settings: {
     save: '保存',
     saved: '已保存',
@@ -209,6 +222,7 @@ const zh: InterestText = {
     rowsPerJournal: '每刊每次取多少条',
     mailto: 'Crossref 邮箱（polite pool）',
     downloadDir: '下载目录（空 = 数据目录下 news/papers）',
+    requireAbstract: '只推送有摘要的条目（推荐）',
     glossary: '翻译术语表',
     addJournal: '增加一行',
     remove: '删除',
@@ -249,6 +263,8 @@ const en: InterestText = {
     detailTitle: 'Feed',
     detailDesc: 'Title and abstract, Chinese translation, details and crawl source.',
     detailCardTitle: 'Details',
+    recordsTitle: 'Saved',
+    recordsDesc: 'Items you kept, newest first; open the original or remove them.',
     settingsTitle: 'Settings',
     settingsDesc: 'Cadence, keywords, journal set and translation glossary; press Save when done.',
   },
@@ -273,6 +289,7 @@ const en: InterestText = {
     dismissed: 'not pushed again',
     error: (reason) => `Last check failed: ${reason}`,
     hint: 'Subscribed papers are introduced in a bubble chat; details live here.',
+    abstractPending: (n) => `${n} more have no abstract yet (the publisher never deposited one); retried daily`,
   },
   detail: {
     pick: 'Nothing yet. Run a check on the Settings tab.',
@@ -280,6 +297,8 @@ const en: InterestText = {
     noAbstractFromSource: 'The source gave no abstract; open the original to read it.',
     titleOnlyTranslation: 'No abstract for this item, so only the title was translated.',
     notTranslated: 'Not translated yet; use Translate above.',
+    record: 'Keep this',
+    recorded: 'In your records',
     refresh: 'Refresh',
     next: 'Next paper',
     authors: 'Authors',
@@ -304,6 +323,7 @@ const en: InterestText = {
     none: '—',
     dismissedNote: 'You marked this one as not interested; it stays in the list.',
   },
+  records: { empty: 'Nothing kept yet. Use Keep this on the Feed tab.' },
   settings: {
     save: 'Save',
     saved: 'Saved',
@@ -329,6 +349,7 @@ const en: InterestText = {
     rowsPerJournal: 'Rows per journal',
     mailto: 'Crossref mailto (polite pool)',
     downloadDir: 'Download dir (empty = <dataDir>/news/papers)',
+    requireAbstract: 'Only push items that have an abstract',
     glossary: 'Translation glossary',
     addJournal: 'Add row',
     remove: 'Remove',

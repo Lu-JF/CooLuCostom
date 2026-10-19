@@ -50,6 +50,11 @@ export interface InterestPushConfigSection {
   mailto: string;
   /** 下载目录；空表示 `<dataDir>/news/papers`。 */
   downloadDir: string;
+  /**
+   * 只推送有摘要的条目。源没给摘要时补不到就等下一轮（摘要往往几天后才出现），
+   * 免得把「只有标题」的条目推给使用者——那等于无效推送。
+   */
+  requireAbstract: boolean;
 }
 
 export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
@@ -76,4 +81,5 @@ export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
   rowsPerJournal: 50,
   mailto: 'research@example.com',
   downloadDir: '',
+  requireAbstract: true,
 };

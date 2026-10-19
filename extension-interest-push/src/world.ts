@@ -15,7 +15,7 @@ import type { Language } from 'cortico/core/language.ts';
 import type { World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import type { InterestPushConfigSection, JournalEntry } from './config.ts';
-import { fetchHfDaily, fetchJournal, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts } from './fetch.ts';
+import { fetchHfDaily, fetchJournal, fetchOpenAlexAbstractByTitle, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts } from './fetch.ts';
 import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
@@ -23,7 +23,7 @@ import { resolvePetModel } from './pet-model.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
 import { translate } from './translate.ts';
-import type { InterestPushView, NewsItem, TranslationState } from './view-types.ts';
+import type { InterestPushView, InterestRecord, NewsItem, TranslationState } from './view-types.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 /** 列表最多留多少条。 */
@@ -32,6 +32,10 @@ const MAX_ITEMS = 60;
 const MAX_PUSHED = 300;
 /** 抓取并发上限：一次要问几十家期刊，别把源惹毛。 */
 const FETCH_CONCURRENCY = 5;
+/** 每轮最多按标题去补几条摘要（一次一条请求，别贪）。 */
+const TITLE_BACKFILL_PER_RUN = 8;
+/** 同一条多久后再试一次按标题补摘要。 */
+const TITLE_BACKFILL_RETRY_MS = 24 * 60 * 60_000;
 
 export interface InterestPushWorldOptions {
   cfg: InterestPushConfigSection;
@@ -58,6 +62,8 @@ interface PersistedState {
   lastCheckAt: number | null;
   answerCursor: number;
   conditional: Record<string, { etag?: string; lastModified?: string }>;
+  /** 条目编号 → 上次按标题补摘要的时刻；避免对同一篇反复去问。 */
+  abstractTried: Record<string, number>;
 }
 
 const EMPTY_STATE: PersistedState = {
@@ -71,6 +77,7 @@ const EMPTY_STATE: PersistedState = {
   lastCheckAt: null,
   answerCursor: 0,
   conditional: {},
+  abstractTried: {},
 };
 
 /** 不认识的回执里出现这些词，就算「不感兴趣」。 */
@@ -87,6 +94,8 @@ export class InterestPushWorld implements World {
   private readonly seen: SeenStore;
   private state: PersistedState;
   private items: NewsItem[] = [];
+  /** 兴趣记录：编号 → 条目快照。落 `news/records.json`。 */
+  private records = new Map<string, InterestRecord>();
   private activeId: string | null = null;
   private translations = new Map<string, TranslationState>();
   private inflight: Promise<void> | null = null;
@@ -96,6 +105,7 @@ export class InterestPushWorld implements World {
     this.seen = new SeenStore(opts.dataDir);
     this.state = this.loadState();
     this.items = this.loadItems();
+    this.records = this.loadRecords();
   }
 
   // ---------------------------------------------------------------- World
@@ -168,6 +178,7 @@ export class InterestPushWorld implements World {
         // 详情排第一：这里才是使用者真正要看的一页。
         { id: 'detail', title: t.panel.detailTitle, description: t.panel.detailDesc },
         { id: 'list', title: t.panel.listTitle, description: t.panel.listDesc },
+        { id: 'records', title: t.panel.recordsTitle, description: t.panel.recordsDesc },
         { id: 'settings', title: t.panel.settingsTitle, description: t.panel.settingsDesc },
       ],
       invoke: (panel, method, args) => this.invoke(panel, method, args, language),
@@ -283,7 +294,13 @@ export class InterestPushWorld implements World {
 
   private async collect(): Promise<NewsItem[]> {
     const cfg = this.opts.cfg;
-    const deps = { fetchImpl: this.opts.fetchImpl ?? fetch, mailto: cfg.mailto };
+    const deps = {
+      fetchImpl: this.opts.fetchImpl ?? fetch,
+      mailto: cfg.mailto,
+      // 可选：这两个免费额度按 IP 共享，有 key 才稳。走环境变量，不落盘。
+      openAlexKey: process.env.OPENALEX_API_KEY ?? '',
+      semanticScholarKey: process.env.S2_API_KEY ?? '',
+    };
     const tierOf = new Map<string, JournalEntry>(cfg.journals.map((j) => [j.issn, j]));
     const jobs: Array<() => Promise<NewsItem[]>> = [
       ...cfg.journals.map((j) => () =>
@@ -320,10 +337,36 @@ export class InterestPushWorld implements World {
       if (first.length > 0) filled += this.applyAbstracts(items, await fetchOpenAlexAbstracts(first, deps), 'openalex');
       const rest = pending();
       if (rest.length > 0) filled += this.applyAbstracts(items, await fetchSemanticScholarAbstracts(rest, deps), 'semanticscholar');
+      // 最后按标题去 OpenAlex 碰一次运气：新文章常是「记录有了、DOI 还没对上」。
+      filled += await this.backfillByTitle(items, deps);
     } catch (err) {
       this.log(`补摘要失败：${String((err as Error)?.message ?? err)}`);
     }
     if (filled > 0) this.log(`补了 ${filled} 条摘要`);
+  }
+
+  /**
+   * 按标题补摘要（一次一条请求）。同一条 24 小时内只试一次，一轮最多试 `TITLE_BACKFILL_PER_RUN` 条，
+   * 免得刚抓回来还没上线摘要的文章被反复追问。
+   */
+  private async backfillByTitle(items: NewsItem[], deps: { fetchImpl?: typeof fetch; mailto: string }): Promise<number> {
+    const now = this.now();
+    const candidates = items
+      .filter((i) => i.abstract.trim() === '' && i.title.trim() !== '')
+      .filter((i) => now - (this.state.abstractTried[i.id] ?? 0) > TITLE_BACKFILL_RETRY_MS)
+      .slice(0, TITLE_BACKFILL_PER_RUN);
+    let filled = 0;
+    if (candidates.length > 0) this.log(`按标题补摘要：试 ${candidates.length} 条`);
+    for (const item of candidates) {
+      this.state.abstractTried[item.id] = now;
+      const text = await fetchOpenAlexAbstractByTitle(item.title, deps);
+      if (text === null) continue;
+      item.abstract = text;
+      item.sourceDetail = `${item.sourceDetail} +openalex标题摘要`;
+      filled += 1;
+      this.log(`按标题补到摘要：${item.id} ${item.title.slice(0, 30)}`);
+    }
+    return filled;
   }
 
   /** 把 doi→摘要 填进缺摘要的条目；返回补上的条数。 */
@@ -342,19 +385,31 @@ export class InterestPushWorld implements World {
 
   private merge(found: NewsItem[]): void {
     const fresh: NewsItem[] = [];
+    // 早先抓进来的 HF 条目按旧规则放行过：按现在的相关性规则重新过一遍，不相关的清掉。
+    const byId = new Map(
+      this.items
+        .filter((i) => i.source !== 'hf' || relevant(`${i.title} ${i.abstract}`, this.opts.cfg.keywords))
+        .map((i) => [i.id, i]),
+    );
+    let improved = 0;
     for (const item of found) {
       if (!item.id || !item.title) continue;
+      const existing = byId.get(item.id);
+      if (existing !== undefined) {
+        // 已经在名单里：只在「这次补到了摘要、上次没有」时更新，别把列表刷新成一份新快照。
+        if (existing.abstract.trim() === '' && item.abstract.trim() !== '') {
+          existing.abstract = item.abstract;
+          existing.sourceDetail = item.sourceDetail;
+          improved += 1;
+        }
+        continue;
+      }
       if (this.seen.has(item.id)) continue;
       this.seen.add({ id: item.id, doi: item.doi, foundAt: item.foundAt });
       fresh.push(item);
     }
     if (fresh.length > 0) this.seen.save();
-    const byId = new Map(
-      // 早先抓进来的 HF 条目按旧规则放行过：按现在的相关性规则重新过一遍，不相关的清掉。
-      this.items
-        .filter((i) => i.source !== 'hf' || relevant(`${i.title} ${i.abstract}`, this.opts.cfg.keywords))
-        .map((i) => [i.id, i]),
-    );
+    if (improved > 0) this.log(`更新了 ${improved} 条的摘要`);
     for (const item of fresh) byId.set(item.id, item);
     this.items = [...byId.values()]
       .sort((a, b) => (a.issued === b.issued ? b.foundAt - a.foundAt : b.issued.localeCompare(a.issued)))
@@ -362,11 +417,16 @@ export class InterestPushWorld implements World {
     this.log(`本轮抓到 ${found.length} 条，其中新的 ${fresh.length} 条`);
   }
 
-  /** 挑一条推送：有摘要的优先（气泡要讲得出内容），都没摘要就退而推最新的一条。 */
+  /**
+   * 挑一条推送。默认只推有摘要的：气泡要讲得出内容，只有标题的推送等于白推
+   * （源没给就等下一轮，摘要往往过几天才补上）。把 requireAbstract 关掉才允许退而推最新的那条。
+   */
   private pickPushItem(): NewsItem | null {
     const skip = new Set([...this.state.pushedIds, ...this.state.dismissed, ...this.state.read]);
     const pool = this.items.filter((i) => !skip.has(i.id));
-    return pool.find((i) => i.abstract.trim() !== '') ?? pool[0] ?? null;
+    const withAbstract = pool.find((i) => i.abstract.trim() !== '');
+    if (withAbstract !== undefined) return withAbstract;
+    return this.opts.cfg.requireAbstract ? null : (pool[0] ?? null);
   }
 
   private async pushItem(item: NewsItem, windowKey: string | null): Promise<void> {
@@ -438,6 +498,7 @@ export class InterestPushWorld implements World {
   // -------------------------------------------------------------- 面板方法
 
   async invoke(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {
+    const t = interestText(language);
     try {
       // 三个面板都放行这两个动作：面板只能调自己那页的方法，不该为了「检查一次」跨页调用。
       if (method === 'checkNow') {
@@ -494,10 +555,24 @@ export class InterestPushWorld implements World {
           }
           return { ok: Boolean(next), reason: next ? null : interestText(language).errors.noActive, view: this.view(language) };
         }
+        if (method === 'record') {
+          const item = this.activeItem();
+          const saved = item === null ? false : this.saveRecord(item);
+          return { ok: saved, reason: saved ? null : t.errors.noActive, view: this.view(language) };
+        }
         if (method === 'dismiss') {
           const item = this.activeItem();
           if (item && !this.state.dismissed.includes(item.id)) this.state.dismissed.push(item.id);
           this.saveState();
+          return { ok: true, reason: null, view: this.view(language) };
+        }
+      }
+      if (panel === 'records') {
+        if (method === 'state') return { ok: true, reason: null, view: this.view(language) };
+        if (method === 'remove') {
+          const id = String(args[0] ?? '');
+          if (id !== '') this.records.delete(id);
+          this.saveRecords();
           return { ok: true, reason: null, view: this.view(language) };
         }
       }
@@ -536,6 +611,7 @@ export class InterestPushWorld implements World {
         rowsPerJournal: cfg.rowsPerJournal,
         mailto: cfg.mailto,
         downloadDir: cfg.downloadDir,
+        requireAbstract: cfg.requireAbstract,
       },
       schedule: {
         lastCheckAt: this.state.lastCheckAt,
@@ -544,6 +620,7 @@ export class InterestPushWorld implements World {
         paused: cfg.pausedUntil > this.now(),
         nextCheckAt: this.state.lastCheckAt === null ? null : this.state.lastCheckAt + Math.max(1, cfg.checkMinutes) * 60_000,
       },
+      records: [...this.records.values()].sort((a, b) => b.savedAt - a.savedAt),
       items: this.items.map((item) => ({
         id: item.id,
         title: item.title,
@@ -695,6 +772,7 @@ export class InterestPushWorld implements World {
       rowsPerJournal: num(raw.rowsPerJournal, 5, 200, cfg.rowsPerJournal),
       mailto: String(raw.mailto ?? cfg.mailto).trim() || cfg.mailto,
       downloadDir: String(raw.downloadDir ?? cfg.downloadDir).trim(),
+      requireAbstract: typeof raw.requireAbstract === 'boolean' ? raw.requireAbstract : cfg.requireAbstract,
     };
     this.opts.persist(patch);
     this.scheduleCheck();
@@ -721,6 +799,48 @@ export class InterestPushWorld implements World {
     try {
       mkdirSync(dirname(this.dataFile('state.json')), { recursive: true });
       writeFileSync(this.dataFile('state.json'), `${JSON.stringify(this.state, null, 2)}\n`, 'utf8');
+    } catch {
+      /* 落盘失败不影响本次动作 */
+    }
+  }
+
+  private saveRecord(item: NewsItem): boolean {
+    if (this.records.has(item.id)) return false;
+    this.records.set(item.id, {
+      id: item.id,
+      title: item.title,
+      journal: item.journal,
+      tier: item.tier,
+      issued: item.issued,
+      doi: item.doi,
+      url: item.url,
+      pdfUrl: item.pdfUrl,
+      source: item.source,
+      sourceDetail: item.sourceDetail,
+      savedAt: this.now(),
+    });
+    this.saveRecords();
+    this.log(`收进兴趣记录：${item.title.slice(0, 40)}`);
+    return true;
+  }
+
+  private loadRecords(): Map<string, InterestRecord> {
+    try {
+      const raw = JSON.parse(readFileSync(this.dataFile('records.json'), 'utf8')) as Record<string, InterestRecord>;
+      return new Map(Object.entries(raw ?? {}));
+    } catch {
+      return new Map();
+    }
+  }
+
+  private saveRecords(): void {
+    try {
+      mkdirSync(dirname(this.dataFile('records.json')), { recursive: true });
+      writeFileSync(
+        this.dataFile('records.json'),
+        `${JSON.stringify(Object.fromEntries(this.records), null, 2)}\n`,
+        'utf8',
+      );
     } catch {
       /* 落盘失败不影响本次动作 */
     }

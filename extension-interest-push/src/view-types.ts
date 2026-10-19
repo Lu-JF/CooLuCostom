@@ -46,6 +46,21 @@ export interface TranslationState {
   reason: string | null;
 }
 
+/** 兴趣记录的一条：抓到的条目 + 收进来的时间。 */
+export interface InterestRecord {
+  id: string;
+  title: string;
+  journal: string;
+  tier: string | null;
+  issued: string;
+  doi: string | null;
+  url: string;
+  pdfUrl: string | null;
+  source: NewsSource;
+  sourceDetail: string;
+  savedAt: number;
+}
+
 export interface InterestPushView {
   config: {
     checkMinutes: number;
@@ -63,6 +78,7 @@ export interface InterestPushView {
     rowsPerJournal: number;
     mailto: string;
     downloadDir: string;
+    requireAbstract: boolean;
   };
   /** 调度状态摘要，配置页显示。 */
   schedule: {
@@ -73,6 +89,8 @@ export interface InterestPushView {
     nextCheckAt: number | null;
   };
   items: NewsRow[];
+  /** 收进兴趣记录的条目，按收藏时间倒序。 */
+  records: InterestRecord[];
   active: NewsItem | null;
   translation: TranslationState | null;
   /** 最近一次检查的错误原因，null 表示正常。 */

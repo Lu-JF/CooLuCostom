@@ -277,6 +277,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
     note.textContent = v ? `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)} · ${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}` : '';
     titleBody.textContent = item?.title ?? '';
     const hasAbstract = (item?.abstract ?? '').trim() !== '';
+    const alreadyRecorded = item !== null && (v?.records ?? []).some((r) => r.id === item.id);
     abstractBody.textContent = item ? (hasAbstract ? item.abstract : t.detail.noAbstractFromSource) : '';
     abstractBody.classList.toggle('ip-muted', item !== null && !hasAbstract);
     detailBody.replaceChildren();
@@ -329,6 +330,22 @@ function mountDetail(ctx: ConsolePanelContext): void {
         { k: t.detail.source, v: item.sourceDetail },
       ]),
     );
+    const recordBtn = ui.button(alreadyRecorded ? t.detail.recorded : t.detail.record, {
+      size: 'sm',
+      onClick: () => {
+        void (async () => {
+          try {
+            const out = await ctx.invoke<InvokeResult>('record');
+            view = out.view;
+            ui.toast(out.ok ? t.detail.recorded : String(out.reason ?? ''), out.ok ? 'ok' : 'bad');
+            render();
+          } catch (err) {
+            ui.toast(errText(err), 'bad');
+          }
+        })();
+      },
+    });
+    recordBtn.disabled = alreadyRecorded;
     const openBtn = ui.button(t.detail.openOriginal, { size: 'sm', onClick: () => window.open(item.url, '_blank', 'noopener') });
     const dlBtn = ui.button(t.detail.download, {
       size: 'sm',
@@ -349,7 +366,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
     });
     dlBtn.disabled = item.pdfUrl === null;
     if (item.pdfUrl === null) dlBtn.title = t.detail.downloadOnlyOA;
-    actionBar.append(openBtn, dlBtn);
+    actionBar.append(recordBtn, openBtn, dlBtn);
   }
 
   void (async () => {
@@ -409,8 +426,16 @@ function mountList(ctx: ConsolePanelContext): void {
 
   function render(): void {
     const v = view;
+    const pendingAbstract = v ? v.items.filter((i) => !i.hasAbstract).length : 0;
     note.textContent = v
-      ? `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)} · ${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}${v.schedule.paused ? ` · ${t.badges.paused}` : ''}`
+      ? [
+          `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)}`,
+          `${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}`,
+          v.schedule.paused ? t.badges.paused : '',
+          pendingAbstract > 0 ? t.list.abstractPending(pendingAbstract) : '',
+        ]
+          .filter((x) => x !== '')
+          .join(' · ')
       : '';
     body.replaceChildren();
     if (!v) return;
@@ -531,6 +556,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const quietStart = timeField(ui, '22:30');
   const quietEnd = timeField(ui, '08:30');
   quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart.el), fieldRow(ui, t.settings.quietEnd, quietEnd.el));
+  const abstractBox = ui.checkbox(t.settings.requireAbstract, { checked: true });
   const week = weekdayButtons(ui);
   // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
   const weekRow = ui.h('div', 'ip-row-block');
@@ -544,6 +570,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   cadenceFoot.append(cadenceSave);
   cadence.body.append(
     numbersRow,
+    abstractBox.el,
     fieldRow(ui, t.settings.pushTimes, ui.h('div')),
     pushTimesEditor.el,
     fieldRow(ui, t.settings.quiet, quietRow),
@@ -698,6 +725,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     rowsPerJournal: Number(rowsInput.value),
     mailto: mailtoInput.value.trim(),
     downloadDir: dirInput.value.trim(),
+    requireAbstract: abstractBox.checked,
     journals: journalRows
       .map((r) => ({ label: r.label.value.trim(), issn: r.issn.value.trim(), tier: r.tier.value.trim(), group: r.group.value.trim() }))
       .filter((j) => j.label !== '' && j.issn !== ''),
@@ -761,6 +789,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     setNum(roundsInput, c.maxRounds);
     setNum(windowInput, c.windowDays);
     setNum(rowsInput, c.rowsPerJournal);
+    abstractBox.setChecked(c.requireAbstract);
     if (document.activeElement !== mailtoInput) mailtoInput.value = c.mailto;
     if (document.activeElement !== dirInput) dirInput.value = c.downloadDir;
     pushTimesEditor.setValues(c.pushTimes);
@@ -805,10 +834,94 @@ function mountSettings(ctx: ConsolePanelContext): void {
   })();
 }
 
+// ----------------------------------------------------------------- 兴趣记录
+
+function mountRecords(ctx: ConsolePanelContext): void {
+  const t = interestText(ctx.language);
+  const ui = ctx.ui;
+  let view: InterestPushView | null = null;
+  let busy: { dispose(): void } | null = null;
+
+  const setBusy = (on: boolean): void => {
+    if (on) {
+      busy ??= ui.busy(t.panel.recordsTitle, t.settings.checking);
+      return;
+    }
+    busy?.dispose();
+    busy = null;
+  };
+
+  const sheet = ui.sheet({ title: t.panel.recordsTitle, desc: t.panel.recordsDesc });
+  const bar = ui.rowbar();
+  const note = ui.h('span', 'ip-note');
+  bar.append(note);
+  const body = ui.h('div', 'ip-list');
+  sheet.body.append(bar, body);
+  ctx.root.appendChild(sheet.el);
+
+  function render(): void {
+    const recs = view?.records ?? [];
+    note.textContent = `${recs.length}`;
+    body.replaceChildren();
+    if (recs.length === 0) {
+      body.appendChild(ui.placeholder(t.records.empty));
+      return;
+    }
+    for (const rec of recs) {
+      const row = ui.h('div', 'ip-rec');
+      const head = ui.h('div', 'ip-rowhead');
+      head.append(ui.h('span', 'ip-title', rec.title));
+      row.append(head, ui.h('div', 'ip-meta', [rec.journal, rec.tier ?? '', rec.issued, rec.source].filter((x) => x !== '').join(' · ')));
+      if (rec.doi !== null) row.append(ui.h('div', 'ip-meta', `DOI ${rec.doi}`));
+      const actions = ui.rowbar();
+      actions.append(
+        ui.button(t.detail.openOriginal, { size: 'sm', onClick: () => window.open(rec.url, '_blank', 'noopener') }),
+        ui.button(t.settings.remove, {
+          size: 'sm',
+          variant: 'danger',
+          onClick: () => {
+            void (async () => {
+              try {
+                view = (await ctx.invoke<InvokeResult>('remove', [rec.id])).view;
+                render();
+              } catch (err) {
+                ui.toast(errText(err), 'bad');
+              }
+            })();
+          },
+        }),
+      );
+      const dl = ui.button(t.detail.download, {
+        size: 'sm',
+        onClick: () => {
+          window.open(rec.pdfUrl ?? rec.url, '_blank', 'noopener');
+        },
+      });
+      dl.disabled = rec.pdfUrl === null;
+      actions.appendChild(dl);
+      row.appendChild(actions);
+      body.appendChild(row);
+    }
+  }
+
+  void (async () => {
+    setBusy(true);
+    try {
+      view = (await ctx.invoke<InvokeResult>('state')).view;
+      render();
+    } catch (err) {
+      body.replaceChildren(ui.msgline(errText(err), true));
+    } finally {
+      setBusy(false);
+    }
+  })();
+}
+
 const bundle: ConsoleClientBundle = {
   panels: {
     detail: { mount: mountDetail },
     list: { mount: mountList },
+    records: { mount: mountRecords },
     settings: { mount: mountSettings },
   },
 };

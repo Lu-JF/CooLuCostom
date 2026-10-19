@@ -236,6 +236,93 @@ describe('推送与回执', () => {
   });
 });
 
+describe('补到的摘要会写回已有条目', () => {
+  it('第二次抓取补上摘要时，名单里那条被更新', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-fill-'));
+    const botDir = makeBotDir();
+    let withAbstract = false;
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes('api.crossref.org')) {
+        const item = { ...CROSSREF_ITEM, DOI: '10.1016/late-abstract', abstract: withAbstract ? '<jats:p>Now with an abstract.</jats:p>' : '' };
+        return new Response(JSON.stringify({ message: { items: [item] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const cfg: InterestPushConfigSection = {
+      ...INTEREST_PUSH_DEFAULTS,
+      keywords: ['bearing fault diagnosis'],
+      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b', group: 'B' }],
+      pushTimes: ['10:30'],
+    };
+    const world = new InterestPushWorld({ cfg, timezone: 'Asia/Shanghai', dataDir, botDir, persist: (patch) => Object.assign(cfg, patch), fetchImpl: fake, now: () => FIXED });
+    const host = new FakeHost();
+    await world.start(host.asHost());
+    expect(world.view('zh').items[0]!.hasAbstract).toBe(false);
+    withAbstract = true;
+    await world.invoke('settings', 'checkNow', [], 'zh');
+    expect(world.view('zh').items).toHaveLength(1);
+    expect(world.view('zh').items[0]!.hasAbstract).toBe(true);
+  });
+});
+
+describe('兴趣记录', () => {
+  it('收进记录、落盘、可移除', async () => {
+    const { world, host, dataDir } = makeWorld();
+    await world.start(host.asHost());
+    const id = world.view('zh').items[0]!.id;
+    await world.invoke('detail', 'state', [id], 'zh');
+    const saved = viewOf(await world.invoke('detail', 'record', [], 'zh'));
+    expect(saved.records).toHaveLength(1);
+    expect(saved.records[0]!.id).toBe(id);
+    const onDisk = JSON.parse(readFileSync(join(dataDir, 'news', 'records.json'), 'utf8')) as Record<string, unknown>;
+    expect(Object.keys(onDisk)).toEqual([id]);
+
+    // 重复收一次不会多出一条
+    await world.invoke('detail', 'record', [], 'zh');
+    expect(world.view('zh').records).toHaveLength(1);
+
+    const after = viewOf(await world.invoke('records', 'remove', [id], 'zh'));
+    expect(after.records).toHaveLength(0);
+  });
+
+  it('没选中条目时收不进去也不抛错', async () => {
+    const { world, host } = makeWorld();
+    const out = (await world.invoke('detail', 'record', [], 'zh')) as { ok: boolean; view: InterestPushView };
+    expect(out.ok).toBe(false);
+    expect(out.view.records).toHaveLength(0);
+    await world.start(host.asHost());
+  });
+});
+
+describe('只推有摘要的条目', () => {
+  it('名单里只有无摘要的条目时，一个都不推', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-noabs-'));
+    const botDir = makeBotDir();
+    const noAbstract = { ...CROSSREF_ITEM, DOI: '10.1016/no-abstract-only', abstract: '' };
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes('api.crossref.org')) {
+        return new Response(JSON.stringify({ message: { items: [noAbstract] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+    const cfg: InterestPushConfigSection = {
+      ...INTEREST_PUSH_DEFAULTS,
+      keywords: ['bearing fault diagnosis'],
+      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b', group: 'B' }],
+      pushTimes: ['10:30'],
+      requireAbstract: true,
+    };
+    const world = new InterestPushWorld({ cfg, timezone: 'Asia/Shanghai', dataDir, botDir, persist: (patch) => Object.assign(cfg, patch), fetchImpl: fake, now: () => FIXED });
+    const host = new FakeHost();
+    await world.start(host.asHost());
+    expect(world.view('zh').items).toHaveLength(1);
+    await world.invoke('settings', 'pushNow', [], 'zh');
+    expect(host.pushed.filter((e) => e.type === 'news.item')).toHaveLength(0);
+  });
+});
+
 describe('配置保存', () => {
   it('越界与非法值被夹紧后一次写回', async () => {
     const { world, host, cfg, patches } = makeWorld();
@@ -310,7 +397,7 @@ describe('控制台声明', () => {
     const decl = world.console('zh');
     expect(decl.label).toBe('兴趣推送');
     // 详情排第一：使用者真正要看的是这一页。
-    expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'settings']);
+    expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'records', 'settings']);
     expect(decl.promptDocs?.[0]?.role).toBe('envPrompt');
     expect(decl.lamps?.length).toBe(3);
     // 选项卡上方不再有「未读」标签（列表里已读的才标）。

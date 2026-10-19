@@ -11,6 +11,17 @@ export interface FetchDeps {
   fetchImpl?: typeof fetch;
   /** Crossref polite pool 邮箱。 */
   mailto: string;
+  /**
+   * 可选配额密钥。OpenAlex 与 Semantic Scholar 的免费额度按 IP 共享，用的人多就会打出
+   * 「Rate limit exceeded / Too Many Requests」。有 key 就带上（来自环境变量，不写进配置文件）。
+   */
+  openAlexKey?: string;
+  semanticScholarKey?: string;
+}
+
+/** OpenAlex 的 key 走 query，Semantic Scholar 的走请求头。 */
+function withOpenAlexKey(url: string, deps: FetchDeps): string {
+  return deps.openAlexKey ? `${url}&api_key=${encodeURIComponent(deps.openAlexKey)}` : url;
 }
 
 /** 条件请求结果。 */
@@ -124,7 +135,7 @@ export async function fetchOpenAlexAbstracts(dois: string[], deps: FetchDeps): P
     const chunk = clean.slice(i, i + 25);
     try {
       const filter = encodeURIComponent(`doi:${chunk.join('|')}`);
-      const url = `https://api.openalex.org/works?filter=${filter}&per-page=50&select=doi,abstract_inverted_index&mailto=${encodeURIComponent(deps.mailto)}`;
+      const url = withOpenAlexKey(`https://api.openalex.org/works?filter=${filter}&per-page=50&select=doi,abstract_inverted_index&mailto=${encodeURIComponent(deps.mailto)}`, deps);
       const res = await doFetch(url, { headers: { Accept: 'application/json' } });
       if (!res.ok) continue;
       const body = (await res.json()) as { results?: unknown[] };
@@ -142,6 +153,43 @@ export async function fetchOpenAlexAbstracts(dois: string[], deps: FetchDeps): P
 }
 
 /**
+ * 按标题在 OpenAlex 找摘要。新上线的 Elsevier 文章常常「有记录但 DOI 索引还没对上」，
+ * 按 DOI 查是空的，按标题 search 却能拿到——实测三篇里补回两篇。
+ */
+export async function fetchOpenAlexAbstractByTitle(
+  title: string,
+  deps: FetchDeps,
+): Promise<string | null> {
+  const clean = title.replace(/\s+/g, ' ').trim();
+  if (clean.length < 12) return null;
+  const doFetch = resolveFetch(deps);
+  try {
+    const url = withOpenAlexKey(
+      'https://api.openalex.org/works?search=' +
+        encodeURIComponent(clean) +
+        `&per-page=3&select=doi,title,abstract_inverted_index&mailto=${encodeURIComponent(deps.mailto)}`,
+      deps,
+    );
+    const res = await doFetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { results?: unknown[] };
+    const norm = (v: unknown): string => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const want = norm(clean);
+    for (const row of body?.results ?? []) {
+      const r = (row ?? {}) as Record<string, unknown>;
+      const got = norm(r.title);
+      // 标题要对得上（完全一致或互相包含），免得抓错别人的摘要。
+      if (got === '' || !(got === want || got.includes(want) || want.includes(got))) continue;
+      const text = invertAbstract(r.abstract_inverted_index);
+      if (text !== '') return text;
+    }
+  } catch {
+    /* 查不到就算了 */
+  }
+  return null;
+}
+
+/**
  * 按 DOI 批量补摘要（Semantic Scholar，一次 POST 最多 500 个 DOI）。
  * Elsevier 等出版社在 Crossref 与 OpenAlex 里都没有摘要，这一层是最后一道兜底。
  */
@@ -153,7 +201,12 @@ export async function fetchSemanticScholarAbstracts(dois: string[], deps: FetchD
   try {
     const res = await doFetch('https://api.semanticscholar.org/graph/v1/paper/batch?fields=abstract', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', Accept: 'application/json', 'User-Agent': `interest-push/0.1 (mailto:${deps.mailto})` },
+      headers: {
+        'content-type': 'application/json',
+        Accept: 'application/json',
+        'User-Agent': `interest-push/0.1 (mailto:${deps.mailto})`,
+        ...(deps.semanticScholarKey ? { 'x-api-key': deps.semanticScholarKey } : {}),
+      },
       body: JSON.stringify({ ids: clean.map((d) => `DOI:${d}`) }),
     });
     if (!res.ok) return out;

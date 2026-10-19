@@ -85,6 +85,16 @@
   margin-bottom: 6px;
 }
 
+/* 兴趣记录的行：是留档，不是可点的列表项 */
+.ip-rec {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* ---- 紧凑字段：标签与控件同一行 */
 .ip-fields {
   display: flex;

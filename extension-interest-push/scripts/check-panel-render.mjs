@@ -132,6 +132,7 @@ try {
   check('顶部只留「换一篇」（刷新与它重复，已删）', detail.buttons.includes('换一篇') && !detail.buttons.includes('刷新'), detail.buttons.slice(0, 4).join(' / '));
   check('已取消下拉列表切换', detail.selects === 0, `${detail.selects} 个下拉`);
   check('详情卡里有打开原文与下载', detail.buttons.includes('打开原文') && detail.buttons.includes('下载原文'), '');
+  check('详情卡里有「收进兴趣记录」', detail.buttons.includes('收进兴趣记录') || detail.buttons.includes('已在兴趣记录里'), '');
 
   // 真点一次「换一篇」：这是使用者报过的问题，必须在这里被抓住。
   const clickedNext = await page.evaluate(() => {
@@ -215,6 +216,7 @@ try {
   check('期刊表有表头且第四列已取消', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区标签/.test(cfg.journalHead) && /分组/.test(cfg.journalHead) && !cfg.hasTierBasisColumn, cfg.journalHead.trim().slice(0, 40));
   check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
   check('术语表按行增删（英文 / 中文两格），且标签里没有「每行」说明', cfg.termRows >= 30 && cfg.termCols === 2 && !cfg.hasPerLineHint, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
+  check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
   check('每组各有「保存本组」', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「立即检查一次」与「立刻推一条」', cfg.text.includes('立即检查一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');
@@ -234,6 +236,28 @@ try {
     failed: /未生效/.test(document.body.textContent ?? ''),
   }));
   check('点「保存本组」会提示保存成功', clickedSave && saved.toast && !saved.failed, saved.failed ? '提示未生效' : '');
+
+  // ---- 兴趣记录页签：先从「推送」页收一条进来，再看它有没有进列表
+  await openPanel('detail', '.ip-ov-title');
+  await page.waitForFunction(() => !document.querySelector('.busy, .busy-overlay, [class*="busy"]'), null, { timeout: 20_000 }).catch(() => {});
+  const clickedKeep = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => ['收进兴趣记录', '已在兴趣记录里'].includes((b.textContent ?? '').trim()) && !b.disabled);
+    if (!btn) return 'none';
+    btn.click();
+    return 'clicked';
+  });
+  await page.waitForTimeout(1500);
+  const recordsOk = await openPanel('records', '.ip-rec, .placeholder');
+  const records = await page.evaluate(() => ({
+    rows: document.querySelectorAll('.ip-rec').length,
+    text: document.body.textContent ?? '',
+    titles: [...document.querySelectorAll('.ip-rec .ip-title')].map((el) => el.textContent ?? ''),
+    hasRemove: [...document.querySelectorAll('.ip-rec button')].some((b) => (b.textContent ?? '').trim() === '删除'),
+    card: [...document.querySelectorAll('.sheet h3')].map((h) => (h.childNodes[0]?.textContent ?? '').trim()).includes('兴趣记录'),
+  }));
+  check('兴趣记录页签挂上了', recordsOk && records.card, '');
+  check('「收进兴趣记录」把条目真的存进了记录', clickedKeep !== 'none' && records.rows >= 1, `点了 ${clickedKeep}，列表 ${records.rows} 行：${records.titles[0]?.slice(0, 30) ?? ''}`);
+  check('记录行能打开原文、能移除', records.hasRemove && (records.text.includes('打开原文')), '');
 
   const ownFailed = failedUrls.filter((u) => !/api\.github\.com|api\/framework\/release/.test(u));
   check('面板相关资源没有失败', ownFailed.length === 0, ownFailed.slice(0, 2).join(' / '));
@@ -259,6 +283,7 @@ try {
     await shoot('detail', '.ip-ov-title', `${prefix}-detail.png`, 1600);
     await shoot('list', '.ip-list', `${prefix}-list.png`, 1100);
     await shoot('settings', '.ip-gridhead', `${prefix}-settings.png`, 2400);
+    await shoot('records', '.ip-rec, .placeholder', `${prefix}-records.png`, 900);
   }
 } catch (err) {
   check('面板渲染检查', false, err instanceof Error ? err.message : String(err));

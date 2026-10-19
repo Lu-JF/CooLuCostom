@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fetchJournal, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts, invertAbstract } from '../src/fetch.ts';
+import { fetchJournal, fetchOpenAlexAbstractByTitle, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts, invertAbstract } from '../src/fetch.ts';
 import { providersRoots, resolvePetModel } from '../src/pet-model.ts';
 
 describe('OpenAlex 摘要回填', () => {
@@ -114,5 +114,57 @@ describe('Semantic Scholar 摘要兜底', () => {
   it('批次失败不抛错，返回空表', async () => {
     const fake = (async () => new Response('rate limited', { status: 429 })) as unknown as typeof fetch;
     await expect(fetchSemanticScholarAbstracts(['10.1/x'], { fetchImpl: fake, mailto: 'me@example.org' })).resolves.toEqual({});
+  });
+});
+
+describe('按标题补摘要', () => {
+  it('标题对得上才采用，对不上就不要', async () => {
+    const fake = (async () =>
+      new Response(
+        JSON.stringify({
+          results: [
+            { doi: 'https://doi.org/10.1/x', title: 'Something completely different about birds', abstract_inverted_index: { birds: [0] } },
+            { doi: 'https://doi.org/10.1/y', title: 'Bearing fault diagnosis under variable speed', abstract_inverted_index: { We: [0], propose: [1], a: [2], lightweight: [3], network: [4] } },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const text = await fetchOpenAlexAbstractByTitle('Bearing fault diagnosis under variable speed', { fetchImpl: fake, mailto: 'me@example.org' });
+    expect(text).toBe('We propose a lightweight network');
+  });
+
+  it('查不到或标题太短就返回 null', async () => {
+    const empty = (async () => new Response(JSON.stringify({ results: [] }), { status: 200 })) as unknown as typeof fetch;
+    await expect(fetchOpenAlexAbstractByTitle('Nothing here matches at all', { fetchImpl: empty, mailto: 'me@example.org' })).resolves.toBeNull();
+    await expect(fetchOpenAlexAbstractByTitle('Short', { fetchImpl: empty, mailto: 'me@example.org' })).resolves.toBeNull();
+  });
+});
+
+describe('可选的配额密钥', () => {
+  it('OpenAlex 带 api_key、Semantic Scholar 带 x-api-key', async () => {
+    const seen: Array<{ url: string; key: string | null }> = [];
+    const fake = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      seen.push({ url: String(input), key: headers['x-api-key'] ?? null });
+      return new Response(JSON.stringify({ results: [], message: '' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as unknown as typeof fetch;
+
+    await fetchOpenAlexAbstracts(['10.1/a'], { fetchImpl: fake, mailto: 'me@example.org', openAlexKey: 'OA-KEY' });
+    await fetchOpenAlexAbstractByTitle('A paper title long enough', { fetchImpl: fake, mailto: 'me@example.org', openAlexKey: 'OA-KEY' });
+    await fetchSemanticScholarAbstracts(['10.1/a'], { fetchImpl: fake, mailto: 'me@example.org', semanticScholarKey: 'S2-KEY' });
+
+    expect(seen[0]!.url).toContain('api_key=OA-KEY');
+    expect(seen[1]!.url).toContain('api_key=OA-KEY');
+    expect(seen[2]!.key).toBe('S2-KEY');
+  });
+
+  it('不给 key 就不带参数', async () => {
+    let url = '';
+    const fake = (async (input: Parameters<typeof fetch>[0]) => {
+      url = String(input);
+      return new Response(JSON.stringify({ results: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await fetchOpenAlexAbstracts(['10.1/a'], { fetchImpl: fake, mailto: 'me@example.org' });
+    expect(url).not.toContain('api_key');
   });
 });

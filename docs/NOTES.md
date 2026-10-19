@@ -256,6 +256,19 @@ Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定�
   挂在两小时一次的检查里会拖很久才生效，改为 15 秒一次只读事件库的扫描（不发网络请求）。
   归属靠「回执之前最近的一条 `news.item`」：`senderKey` 就是条目编号。
 
+### 摘要：来源侧的实情与处理
+
+- **Crossref 里没有就是没有**：抽 IEEE TIE/TIM、Measurement、EAAI、ESWA、Neural Networks 的新文章直接问
+  `/works/<doi>`，`abstract` 字段为空——出版社没交存，不是取数写错了。
+- **OpenAlex 的免费额度按 IP 共享**：打多了会返回
+  `Rate limit exceeded … ($0 remaining; resets at midnight UTC)`；Semantic Scholar 无 key 会 429。
+  两个的 key 都免费，可放进 `OPENALEX_API_KEY` / `S2_API_KEY`（环境变量，不落盘）。
+- **补摘要按三层来**：Crossref 自带 → 按 DOI 批量问 OpenAlex → 剩下的按 DOI 问 Semantic Scholar →
+  仍没有的**按标题**单查 OpenAlex（一轮最多 8 条，同一条 24 小时只试一次）。按标题查是必要的：
+  新文章的 DOI 在 OpenAlex 里常还没对上，按 DOI 是空的、按标题却有；标题要归一化后对得上才采用，免得抓错。
+- **补到的摘要要写回已有条目**：`merge` 早期见到 `seen` 就 `continue`，于是回填只对新条目生效、
+  名单里的老条目永远空着；改成「已在名单里的，只在这次补到了摘要且上次没有时更新」。
+
 ### 面板（续）
 
 - **`ctx.invoke(method, args)` 的第一个参数是方法名，不是页签名**。面板由 `ctx.panelId` 决定，
@@ -264,6 +277,10 @@ Windows 安装版的数据目录位于程序目录旁的 `data\`。位置判定�
   渲染检查现在会真点「换一篇」和「保存本组」，把这类哑失效挡住。
 - **时刻选择做成「时 + 分」两个下拉**：单一 96 项的下拉不好翻，直接手打又容易写错；两栏点选即可，
   存量里不在 5 分钟档上的值会临时补一个选项，原值照旧显示。
+
+- **气泡里不要提供「存进兴趣记录」这类选项**：保存是使用者在「推送」页点一下的事；写进环境提示词后
+  bot 不再自造这类选项。数据面方法是 `detail.record`（收进）与 `records.remove`（移除），
+  记录落 `news/records.json`。
 
 ## 隐私约定
 
