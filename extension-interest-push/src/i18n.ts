@@ -94,6 +94,7 @@ export interface InterestText {
     blockAbstract: string;
     blockDownload: string;
     abstractHint: string;
+    quietConflict: (times: string) => string;
     groupSources: string;
     groupTranslate: string;
     checkMinutes: string;
@@ -240,13 +241,14 @@ const zh: InterestText = {
     blockAbstract: '摘要策略',
     blockDownload: '下载',
     abstractHint: '无摘要的条目不推送，保留在列表中，每日重试。',
+    quietConflict: (times) => `这些推送时刻落在静默时段内，不会触发：${times}`,
     groupSources: '数据源',
     groupTranslate: '翻译',
     checkMinutes: '检查间隔（分钟）',
     pushTimes: '推送时刻',
     dailyCap: '每天最多几条',
     quiet: '静默时段',
-    pushDays: '允许推送的星期（1=周一…7=周日）',
+    pushDays: '允许推送的星期',
     maxRounds: '气泡对话轮次上限',
     pausedUntil: '暂停到',
     resumNow: '取消暂停',
@@ -391,13 +393,14 @@ const en: InterestText = {
     blockAbstract: 'Abstracts',
     blockDownload: 'Download',
     abstractHint: 'Items without an abstract are not pushed; kept in the list and retried daily.',
+    quietConflict: (times) => `These push times fall inside the quiet window and will not fire: ${times}`,
     groupSources: 'Sources',
     groupTranslate: 'Translation',
     checkMinutes: 'Check interval (minutes)',
     pushTimes: 'Push times',
     dailyCap: 'Max pushes per day',
     quiet: 'Quiet hours',
-    pushDays: 'Allowed weekdays (1=Mon…7=Sun)',
+    pushDays: 'Allowed weekdays',
     maxRounds: 'Max bubble rounds',
     pausedUntil: 'Paused until',
     resumNow: 'Resume now',

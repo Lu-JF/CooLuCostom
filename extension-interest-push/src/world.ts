@@ -8,7 +8,7 @@
  *
  * 说话的是 bot（桌宠的模型与人设），World 只发事实、读回执。翻译走桌宠配置的模型端点，见 translate.ts。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Language } from 'cortico/core/language.ts';
@@ -114,7 +114,10 @@ export class InterestPushWorld implements World {
 
   envPromptVars(): Record<string, string> {
     // 占位符名不用连字符：模板渲染只认 [\w.] 一类的名字，带连字符的会被原样留下。
-    return { 'interestpush.status': this.statusText() };
+    return {
+      'interestpush.status': this.statusText(),
+      'interestpush.rounds': String(Math.max(1, Math.floor(this.opts.cfg.maxRounds))),
+    };
   }
 
   tools(): never[] {
@@ -123,7 +126,9 @@ export class InterestPushWorld implements World {
 
   async start(host: WorldHost): Promise<void> {
     this.host = host;
+    this.restoreConfigSnapshot();
     await this.run('start');
+    this.pruneCaches();
     this.scheduleCheck();
     this.schedulePush();
     // 问答回执一到就该认领（已读、不再推送），不能等下一次检查（默认隔两小时）。
@@ -194,7 +199,10 @@ export class InterestPushWorld implements World {
           description: '把这段交给 bot：news.item 事件怎么处理、气泡对话怎么走。',
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
-          vars: [{ name: 'interestpush.status', description: '当前的检查与推送读数，此刻的值。', multiline: false }],
+          vars: [
+          { name: 'interestpush.status', description: '当前的检查与推送读数，此刻的值。', multiline: false },
+          { name: 'interestpush.rounds', description: '气泡对话轮数上限，取自配置。', multiline: false },
+        ],
         },
       ],
     };
@@ -291,6 +299,8 @@ export class InterestPushWorld implements World {
     }
     this.saveState();
     this.saveItems();
+    this.pruneCaches();
+    this.writeConfigSnapshot();
   }
 
   private async collect(): Promise<NewsItem[]> {
@@ -479,21 +489,29 @@ export class InterestPushWorld implements World {
       this.log('速评跳过：找不到桌宠端点');
       return null;
     }
-    try {
-      const state = await reviewItem(item, {
-        dataDir: this.opts.dataDir,
-        keywords: this.opts.cfg.keywords,
-        baseUrl: model.baseUrl,
-        apiKey: model.apiKey,
-        model: model.model,
-        fetchImpl: this.opts.fetchImpl,
-      });
-      this.log(state.ok ? `大肥鱼速评 ${state.total}/10：${item.title.slice(0, 30)}` : `速评失败：${state.reason}`);
-      return state.ok ? state : null;
-    } catch (err) {
-      this.log(`速评出错：${String((err as Error)?.message ?? err)}`);
-      return null;
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const state = await reviewItem(item, {
+          dataDir: this.opts.dataDir,
+          keywords: this.opts.cfg.keywords,
+          baseUrl: model.baseUrl,
+          apiKey: model.apiKey,
+          model: model.model,
+          fetchImpl: this.opts.fetchImpl,
+        });
+        if (state.ok) {
+          this.log(`大肥鱼速评 ${state.total}/10：${item.title.slice(0, 30)}`);
+          return state;
+        }
+        this.log(`速评失败（第 ${attempt} 次）：${state.reason}`);
+        if (attempt === 2) return null;
+      } catch (err) {
+        this.log(`速评出错（第 ${attempt} 次）：${String((err as Error)?.message ?? err)}`);
+        if (attempt === 2) return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
     }
+    return null;
   }
 
   private async pushItem(item: NewsItem, windowKey: string | null, countToday = true): Promise<void> {
@@ -675,6 +693,10 @@ export class InterestPushWorld implements World {
         if (method === 'state') return { ok: true, reason: null, view: this.view(language) };
         if (method === 'saveSettings') {
           const clamped = this.saveSettings(args[0]);
+          this.writeConfigSnapshot();
+          // 改了推送时刻 / 星期 / 检查间隔，必须重排定时器，否则新加的窗口要等到下一天才生效。
+          this.scheduleCheck();
+          this.schedulePush();
           return { ok: true, reason: clamped ? 'clamped' : null, view: this.view(language) };
         }
       }
@@ -708,6 +730,7 @@ export class InterestPushWorld implements World {
         mailto: cfg.mailto,
         downloadDir: cfg.downloadDir,
         requireAbstract: cfg.requireAbstract,
+        quietConflicts: this.quietConflicts(),
       },
       schedule: {
         lastCheckAt: this.state.lastCheckAt,
@@ -895,6 +918,104 @@ export class InterestPushWorld implements World {
 
   private dataFile(name: string): string {
     return join(this.opts.dataDir, 'news', name);
+  }
+
+  /** 配置快照文件：升级安装版可能把 worlds.<id> 重置为默认值，启动时靠它补回。 */
+  private snapshotFile(): string {
+    return this.dataFile('config-snapshot.json');
+  }
+
+  /** 把当前生效配置写入快照（保存配置、启动完成、推送后都会刷新）。 */
+  private writeConfigSnapshot(): void {
+    const cfg = this.opts.cfg;
+    const snap = {
+      checkMinutes: cfg.checkMinutes,
+      pushTimes: [...cfg.pushTimes],
+      dailyCap: cfg.dailyCap,
+      quiet: [...cfg.quiet],
+      pushDays: [...cfg.pushDays],
+      maxRounds: cfg.maxRounds,
+      keywords: [...cfg.keywords],
+      arxivCats: [...cfg.arxivCats],
+      windowDays: cfg.windowDays,
+      rowsPerJournal: cfg.rowsPerJournal,
+      journalDelayDays: cfg.journalDelayDays,
+      mailto: cfg.mailto,
+      downloadDir: cfg.downloadDir,
+      requireAbstract: cfg.requireAbstract,
+      journals: cfg.journals.map((j) => ({ ...j })),
+      glossary: [...cfg.glossary],
+      at: Date.now(),
+    };
+    try {
+      mkdirSync(dirname(this.snapshotFile()), { recursive: true });
+      writeFileSync(this.snapshotFile(), `${JSON.stringify(snap, null, 2)}\n`, 'utf8');
+    } catch {
+      /* 快照失败不影响运行 */
+    }
+  }
+
+  /**
+   * 配置被重置时从快照恢复。判定标准只有两条：期刊从多家变成不足 5 家，或推送时刻被清空。
+   * 使用者主动清空名单时快照会跟着变空，因此不会反复互相覆盖。
+   */
+  private restoreConfigSnapshot(): void {
+    let snap: Partial<InterestPushConfigSection> | null = null;
+    try {
+      snap = JSON.parse(readFileSync(this.snapshotFile(), 'utf8')) as Partial<InterestPushConfigSection>;
+    } catch {
+      return;
+    }
+    if (!snap) return;
+    const cfg = this.opts.cfg;
+    const snapJournals = Array.isArray(snap.journals) ? snap.journals : [];
+    const journalsReset = snapJournals.length >= 5 && cfg.journals.length < 5;
+    const timesReset = (snap.pushTimes ?? []).length > 0 && cfg.pushTimes.length === 0;
+    if (!journalsReset && !timesReset) return;
+    const { pausedUntil: _paused, ...patch } = snap as InterestPushConfigSection;
+    this.opts.persist(patch);
+    Object.assign(cfg, patch);
+    this.log('配置看起来被重置了，已从快照恢复');
+  }
+
+  /** 缓存只保留当前列表里的条目：列表每天覆盖，缓存跟着收敛，不会无限增长。 */
+  private pruneCaches(): void {
+    const keep = new Set(this.items.map((i) => i.id));
+    for (const dir of ['reviews', 'translated']) {
+      const full = join(this.opts.dataDir, 'news', dir);
+      let names: string[];
+      try {
+        names = readdirSync(full);
+      } catch {
+        continue;
+      }
+      let removed = 0;
+      for (const name of names) {
+        if (!name.endsWith('.json')) continue;
+        if (keep.has(name.slice(0, -5))) continue;
+        try {
+          unlinkSync(join(full, name));
+          removed += 1;
+        } catch {
+          /* 单个删不掉不影响其余 */
+        }
+      }
+      if (removed > 0) this.log(`清理 ${dir} 缓存 ${removed} 条（不在当前列表）`);
+    }
+  }
+
+  /** 落在静默时段里的推送时刻：配置页据此提示，避免设了却不生效。 */
+  private quietConflicts(): string[] {
+    const start = parseTime(this.opts.cfg.quiet[0] ?? '');
+    const end = parseTime(this.opts.cfg.quiet[1] ?? '');
+    if (!start || !end) return [];
+    const a = start.h * 60 + start.m;
+    const b = end.h * 60 + end.m;
+    const inside = (m: number): boolean => (a <= b ? m >= a && m < b : m >= a || m < b);
+    return this.opts.cfg.pushTimes.filter((text) => {
+      const p = parseTime(text);
+      return p !== null && inside(p.h * 60 + p.m);
+    });
   }
 
   private loadState(): PersistedState {

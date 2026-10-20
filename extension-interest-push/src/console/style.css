@@ -746,3 +746,19 @@
 .ip-shell.ip-shell .sheet > h3 {
   margin-bottom: 16px;
 }
+
+
+/* 配置页的提醒行：静默时段盖住了推送时刻 */
+.ip-warn {
+  margin-top: 2px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, #c9861a 35%, transparent);
+  background: color-mix(in srgb, #c9861a 8%, var(--ip-sheet));
+  color: color-mix(in srgb, #c9861a 78%, var(--ip-ink));
+  font-size: 12px;
+}
+
+.ip-warn[hidden] {
+  display: none;
+}

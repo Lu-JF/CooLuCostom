@@ -2,7 +2,7 @@
  * World 的集成测试：注入假网络与固定时钟，验证「抓取 → 去重落盘 → 推送事件 → 读回执 → 翻译」这条链路。
  * 宿主事件库与 pushEvent 由 `helpers/fake-host.ts` 提供。
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -588,5 +588,63 @@ describe('大肥鱼速评', () => {
     expect(pushed).toHaveLength(1);
     expect(pushed[0]!.senderKey).toBe('bbbb0002');
     expect(pushed[0]!.text).toContain('标题：Older paper');
+  });
+});
+
+describe('配置生效与缓存收敛', () => {
+  it('改轮数上限后，提示词里的轮数变量跟着变', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    expect(world.envPromptVars()['interestpush.rounds']).toBe('3');
+    await world.invoke('settings', 'saveSettings', [{ maxRounds: 4 }], 'zh');
+    expect(world.envPromptVars()['interestpush.rounds']).toBe('4');
+  });
+
+  it('新增推送时刻后，下一个窗口立刻按新配置计算', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    await world.invoke('settings', 'saveSettings', [{ pushTimes: ['10:30', '15:35', '19:30'] }], 'zh');
+    const next = world.nextWindowAt();
+    expect(next).not.toBeNull();
+    // FIXED 是 2026-10-19 13:00（本地），下一个窗口应为 15:35
+    const at = new Date(next!);
+    expect([at.getHours(), at.getMinutes()]).toEqual([15, 35]);
+  });
+
+  it('推送时刻落在静默时段时，视图会给出冲突清单', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    expect(world.view('zh').config.quietConflicts).toEqual([]);
+    await world.invoke('settings', 'saveSettings', [{ quiet: ['10:00', '16:00'] }], 'zh');
+    expect(world.view('zh').config.quietConflicts).toEqual(['10:30']);
+  });
+
+  it('配置被重置（期刊清空）时，启动会从快照恢复', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-snap-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const journals = Array.from({ length: 6 }, (_, i) => ({
+      label: `Journal ${i}`, issn: `0000-000${i}`, tier: 'Q1', tierBasis: 'b', group: 'A',
+    }));
+    writeFileSync(
+      join(dataDir, 'news', 'config-snapshot.json'),
+      JSON.stringify({ journals, pushTimes: ['10:30'], keywords: ['bearing'], maxRounds: 4 }),
+    );
+    const { world, host, cfg, patches } = makeWorld({ dataDir });
+    cfg.journals = [];
+    await world.start(host.asHost());
+    expect(world.view('zh').config.journals.length).toBe(6);
+    expect(patches.some((p) => (p.journals ?? []).length === 6)).toBe(true);
+  });
+
+  it('不在当前列表里的译文与速评缓存会被清掉', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-prune-'));
+    for (const dir of ['reviews', 'translated']) {
+      mkdirSync(join(dataDir, 'news', dir), { recursive: true });
+      writeFileSync(join(dataDir, 'news', dir, 'gone0001.json'), '{}');
+    }
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    expect(existsSync(join(dataDir, 'news', 'reviews', 'gone0001.json'))).toBe(false);
+    expect(existsSync(join(dataDir, 'news', 'translated', 'gone0001.json'))).toBe(false);
   });
 });

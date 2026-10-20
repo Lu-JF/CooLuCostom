@@ -696,12 +696,20 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const pauseDate = ui.input({ type: 'date' });
   const resumeBtn = ui.button(t.settings.resumNow, { size: 'sm', onClick: () => { pauseDate.value = ''; } });
   pauseRow.append(fieldRow(ui, t.settings.pausedUntil, pauseDate), resumeBtn);
+  const quietWarn = ui.h('div', 'ip-warn');
   const cadenceSave = ui.button(t.settings.saveSectionOf(t.settings.groupPush), { variant: 'primary', size: 'sm', onClick: () => void saveCard('cadence') });
   const cadenceFoot = ui.rowbar();
   cadenceFoot.append(cadenceSave);
   cadence.body.append(
     block(ui, t.settings.blockFrequency, numbersRow),
-    block(ui, t.settings.blockWindows, fieldRow(ui, t.settings.pushTimes, ui.h('div')), pushTimesEditor.el, fieldRow(ui, t.settings.quiet, quietRow)),
+    block(
+      ui,
+      t.settings.blockWindows,
+      fieldRow(ui, t.settings.pushTimes, ui.h('div')),
+      pushTimesEditor.el,
+      fieldRow(ui, t.settings.quiet, quietRow),
+      quietWarn,
+    ),
     block(ui, t.settings.blockDays, weekRow, pauseRow),
     cadenceFoot,
   );
@@ -930,6 +938,9 @@ function mountSettings(ctx: ConsolePanelContext): void {
     setNum(rowsInput, c.rowsPerJournal);
     setNum(delayInput, c.journalDelayDays);
     abstractBox.setChecked(c.requireAbstract);
+    const conflicts = c.quietConflicts ?? [];
+    quietWarn.textContent = conflicts.length > 0 ? t.settings.quietConflict(conflicts.join('、')) : '';
+    quietWarn.hidden = conflicts.length === 0;
     if (document.activeElement !== mailtoInput) mailtoInput.value = c.mailto;
     if (document.activeElement !== dirInput) dirInput.value = c.downloadDir;
     pushTimesEditor.setValues(c.pushTimes);

@@ -93,6 +93,8 @@ export interface InterestPushView {
     mailto: string;
     downloadDir: string;
     requireAbstract: boolean;
+    /** 落在静默时段里的推送时刻（配置页据此提示）。 */
+    quietConflicts: string[];
   };
   /** 调度状态摘要，配置页显示。 */
   schedule: {

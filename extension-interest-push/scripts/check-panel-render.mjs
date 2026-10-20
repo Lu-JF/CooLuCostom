@@ -364,6 +364,8 @@ try {
   // ---- 兴趣记录页签：先从「推送」页收一条进来，再看它有没有进列表
   await openPanel('detail', '.ip-ov-title');
   await page.waitForFunction(() => !document.querySelector('.busy, .busy-overlay, [class*="busy"]'), null, { timeout: 20_000 }).catch(() => {});
+  // 记下当前条目，测完把它从兴趣记录里删掉，别把检查留下的记录混进使用者的数据。
+  const keepTarget = await page.evaluate(() => document.title);
   const clickedKeep = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('button')];
     const btn = btns.find((b) => ['收进兴趣记录', '已在兴趣记录里'].includes((b.textContent ?? '').trim()) && !b.disabled);
@@ -387,6 +389,18 @@ try {
   check('兴趣记录页签挂上了', recordsOk && records.card, '');
   check('「收进兴趣记录」把条目真的存进了记录', clickedKeep !== 'none' && records.rows >= 1, `点了 ${clickedKeep}，列表 ${records.rows} 行：${records.titles[0]?.slice(0, 30) ?? ''}`);
   check('记录行能打开原文、能移除', records.hasRemove && (records.text.includes('打开原文')), '');
+
+  // 收尾：把这次点出来的那一条删掉（记录页的删除按钮就是 invoke('remove')）。
+  if (clickedKeep === 'clicked') {
+    await page.evaluate(() => {
+      const row = document.querySelector('.ip-rec');
+      const btn = row ? [...row.querySelectorAll('button')].find((b) => (b.textContent ?? '').trim() === '删除') : null;
+      btn?.click();
+    });
+    await page.waitForTimeout(800);
+    const after = await page.evaluate(() => document.querySelectorAll('.ip-rec').length);
+    check('检查结束后把自己加的那条记录删掉', after < records.rows, `剩 ${after} 行`);
+  }
 
   const ownFailed = failedUrls.filter((u) => !/api\.github\.com|api\/framework\/release/.test(u));
   check('面板相关资源没有失败', ownFailed.length === 0, ownFailed.slice(0, 2).join(' / '));
