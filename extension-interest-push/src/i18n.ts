@@ -114,6 +114,7 @@ export interface InterestText {
     mailto: string;
     downloadDir: string;
     requireAbstract: string;
+    allowNoAbstract: string;
     glossary: string;
     addJournal: string;
     remove: string;
@@ -145,7 +146,14 @@ export interface InterestText {
     invalid: string;
     clearPause: string;
   };
-  errors: { unknownMethod: (m: string) => string; noActive: string; noEndpoint: string; nothingToPush: string };
+  errors: {
+    unknownMethod: (m: string) => string;
+    noActive: string;
+    noEndpoint: string;
+    poolEmpty: (total: number, pushed: number, dismissed: number, left: number) => string;
+    /** 池底空时提示去哪里打开兜底开关。 */
+    poolEmptyHint: string;
+  };
 }
 
 const zh: InterestText = {
@@ -262,6 +270,7 @@ const zh: InterestText = {
     mailto: 'Crossref 邮箱',
     downloadDir: '下载目录',
     requireAbstract: '只推送有摘要的条目（推荐）',
+    allowNoAbstract: '没有可推条目时允许推缺摘要的（仅手动）',
     glossary: '翻译术语表',
     addJournal: '增加一行',
     remove: '删除',
@@ -296,7 +305,9 @@ const zh: InterestText = {
     unknownMethod: (m) => `未实现的方法 ${m}`,
     noActive: '没有选中的条目',
     noEndpoint: '找不到可用的模型端点',
-    nothingToPush: '没有可推的条目了（都推过、或都没摘要）',
+    poolEmpty: (total, pushed, dismissed, left) =>
+      `没有可推的条目：共 ${total} 条，已推 ${pushed} 条，判为不感兴趣 ${dismissed} 条，其余 ${left} 条都缺摘要。`,
+    poolEmptyHint: ' 可在「数据源」里打开「没有可推条目时允许推缺摘要的」，手动推送就会带上缺摘要的条目。',
   },
 };
 
@@ -414,6 +425,7 @@ const en: InterestText = {
     mailto: 'Crossref mailto',
     downloadDir: 'Download dir',
     requireAbstract: 'Only push items that have an abstract',
+    allowNoAbstract: 'Allow items without an abstract when nothing else is left (manual only)',
     glossary: 'Translation glossary',
     addJournal: 'Add row',
     remove: 'Remove',
@@ -448,7 +460,9 @@ const en: InterestText = {
     unknownMethod: (m) => `method ${m} is not implemented`,
     noActive: 'no active item',
     noEndpoint: 'no usable model endpoint',
-    nothingToPush: 'nothing left to push (all pushed, or none has an abstract)',
+    poolEmpty: (total, pushed, dismissed, left) =>
+      `Nothing pushable: ${total} items, ${pushed} pushed, ${dismissed} dismissed, the remaining ${left} have no abstract.`,
+    poolEmptyHint: ' Enable "allow items without an abstract" under Data sources to push one manually.',
   },
 };
 

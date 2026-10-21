@@ -684,7 +684,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
         try {
           const out = await ctx.invoke<InvokeResult>('pushNow');
           view = out.view;
-          pushStatus.set(out.ok ? t.settings.saved : String(out.reason ?? ''), out.ok ? 'ok' : 'bad');
+          pushStatus.set(out.ok ? String(out.reason ?? t.settings.saved) : String(out.reason ?? ''), out.ok ? 'ok' : 'bad');
           render();
         } catch (err) {
           pushStatus.set(errText(err), 'bad');
@@ -718,6 +718,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const quietEnd = timeField(ui, '08:30');
   quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart.el), fieldRow(ui, t.settings.quietEnd, quietEnd.el));
   const abstractBox = ui.checkbox(t.settings.requireAbstract, { checked: true });
+  const bareBox = ui.checkbox(t.settings.allowNoAbstract, { checked: false });
   const week = weekdayButtons(ui);
   // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
   const weekRow = ui.h('div', 'ip-row-block');
@@ -801,7 +802,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
       catsEditor.el,
     ),
     block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoInput)),
-    block(ui, t.settings.blockAbstract, abstractBox.el, ui.msgline(t.settings.abstractHint)),
+    block(ui, t.settings.blockAbstract, abstractBox.el, bareBox.el, ui.msgline(t.settings.abstractHint)),
     block(ui, t.settings.blockDownload, fieldRow(ui, t.settings.downloadDir, dirBar)),
     sourcesFoot,
   );
@@ -903,6 +904,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     mailto: mailtoInput.value.trim(),
     downloadDir: dirInput.value.trim(),
     requireAbstract: abstractBox.checked,
+    allowNoAbstractPush: bareBox.checked,
     journals: journalRows
       .map((r) => ({ label: r.label.value.trim(), issn: r.issn.value.trim(), tier: r.tier.value.trim(), group: r.group.value.trim() }))
       .filter((j) => j.label !== '' && j.issn !== ''),
@@ -968,6 +970,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     setNum(rowsInput, c.rowsPerJournal);
     setNum(delayInput, c.journalDelayDays);
     abstractBox.setChecked(c.requireAbstract);
+    bareBox.setChecked(c.allowNoAbstractPush);
     const conflicts = c.quietConflicts ?? [];
     quietWarn.textContent = conflicts.length > 0 ? t.settings.quietConflict(conflicts.join('、')) : '';
     quietWarn.hidden = conflicts.length === 0;

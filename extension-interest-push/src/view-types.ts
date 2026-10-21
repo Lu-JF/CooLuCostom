@@ -95,6 +95,7 @@ export interface InterestPushView {
     mailto: string;
     downloadDir: string;
     requireAbstract: boolean;
+    allowNoAbstractPush: boolean;
     /** 落在静默时段里的推送时刻（配置页据此提示）。 */
     quietConflicts: string[];
   };

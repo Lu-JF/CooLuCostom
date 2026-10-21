@@ -35,7 +35,7 @@ const MAX_PUSHED = 300;
 /** 抓取并发上限：一次要问几十家期刊，别把源惹毛。 */
 const FETCH_CONCURRENCY = 5;
 /** 每轮最多按标题去补几条摘要（一次一条请求，别贪）。 */
-const TITLE_BACKFILL_PER_RUN = 8;
+const TITLE_BACKFILL_PER_RUN = 24;
 /** 同一条多久后再试一次按标题补摘要。 */
 const TITLE_BACKFILL_RETRY_MS = 24 * 60 * 60_000;
 
@@ -380,6 +380,8 @@ export class InterestPushWorld implements World {
     const candidates = items
       .filter((i) => i.abstract.trim() === '' && i.title.trim() !== '')
       .filter((i) => now - (this.state.abstractTried[i.id] ?? 0) > TITLE_BACKFILL_RETRY_MS)
+      // 还没推过的先补：它们缺摘要就真的推不出去。
+      .sort((a, b) => Number(this.state.pushedIds.includes(a.id)) - Number(this.state.pushedIds.includes(b.id)))
       .slice(0, TITLE_BACKFILL_PER_RUN);
     let filled = 0;
     if (candidates.length > 0) this.log(`按标题补摘要：试 ${candidates.length} 条`);
@@ -621,13 +623,19 @@ export class InterestPushWorld implements World {
       if (method === 'pushNow') {
         // 页面上哪篇能推就推哪篇；它推不了（已推过 / 没摘要 / 判过不感兴趣）就换下一篇能推的。
         // 推完 activeId 跟到那篇（见 pushItem），于是「推送」页签永远显示刚刚气泡讲的那一篇。
-        const target = pickManualCandidate(this.items, this.activeItem(), this.pickOptions());
+        // 手动是人明确要求的：只剩无摘要的条目时照样推，气泡里会注明源未提供摘要。
+        const active = this.activeItem();
+        const strict = pickManualCandidate(this.items, active, this.pickOptions());
+        const loose = strict === null && this.opts.cfg.allowNoAbstractPush
+          ? pickManualCandidate(this.items, active, { ...this.pickOptions(), requireAbstract: false })
+          : null;
+        const target = strict ?? loose;
         if (target === null) {
-          return { ok: false, reason: t.errors.nothingToPush, view: this.view(language) };
+          return { ok: false, reason: this.emptyPoolText(language), view: this.view(language) };
         }
         await this.pushItem(target, null, false);
         this.saveState();
-        return { ok: true, reason: null, view: this.view(language) };
+        return { ok: true, reason: loose === null ? null : t.detail.noAbstractFromSource, view: this.view(language) };
       }
       if (panel === 'list') {
         if (method === 'state') return { ok: true, reason: null, view: this.view(language) };
@@ -737,6 +745,7 @@ export class InterestPushWorld implements World {
         mailto: cfg.mailto,
         downloadDir: cfg.downloadDir,
         requireAbstract: cfg.requireAbstract,
+        allowNoAbstractPush: cfg.allowNoAbstractPush,
         quietConflicts: this.quietConflicts(),
       },
       schedule: {
@@ -774,6 +783,16 @@ export class InterestPushWorld implements World {
     if (this.items.length === 0) return null;
     const hit = this.activeId === null ? undefined : this.items.find((i) => i.id === this.activeId);
     return hit ?? this.items[0] ?? null;
+  }
+
+  /** 池底空了的说明：已推多少、无摘要多少，比一句「没有可推的条目」有用。 */
+  private emptyPoolText(language: Language): string {
+    const t = interestText(language);
+    const pushed = new Set(this.state.pushedIds);
+    const dismissed = new Set(this.state.dismissed);
+    const pushedCount = this.items.filter((i) => pushed.has(i.id)).length;
+    const rest = this.items.length - pushedCount;
+    return t.errors.poolEmpty(this.items.length, pushedCount, dismissed.size, Math.max(0, rest - dismissed.size)) + (this.opts.cfg.allowNoAbstractPush ? '' : t.errors.poolEmptyHint);
   }
 
   private async translateActive(language: Language): Promise<unknown> {
@@ -915,6 +934,8 @@ export class InterestPushWorld implements World {
       mailto: String(raw.mailto ?? cfg.mailto).trim() || cfg.mailto,
       downloadDir: String(raw.downloadDir ?? cfg.downloadDir).trim(),
       requireAbstract: typeof raw.requireAbstract === 'boolean' ? raw.requireAbstract : cfg.requireAbstract,
+      allowNoAbstractPush:
+        typeof raw.allowNoAbstractPush === 'boolean' ? raw.allowNoAbstractPush : cfg.allowNoAbstractPush,
     };
     this.opts.persist(patch);
     this.scheduleCheck();
@@ -951,6 +972,7 @@ export class InterestPushWorld implements World {
       mailto: cfg.mailto,
       downloadDir: cfg.downloadDir,
       requireAbstract: cfg.requireAbstract,
+      allowNoAbstractPush: cfg.allowNoAbstractPush,
       journals: cfg.journals.map((j) => ({ ...j })),
       glossary: [...cfg.glossary],
       at: Date.now(),

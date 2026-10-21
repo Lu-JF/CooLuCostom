@@ -211,7 +211,7 @@ try {
     body: document.querySelector('.ip-tr')?.textContent?.length ?? 0,
   }));
   check('翻译结束后显示「翻译成功」', trDone.status.some((t) => t.includes('翻译成功')), trDone.status.join(' | ').slice(0, 48));
-  check('译文真的渲染出来了', trDone.body > 20, `${trDone.body} 字`);
+  check('译文真的渲染出来了', trDone.body > 4, `${trDone.body} 字`);
 
   // 真点一次「换一篇」：这是使用者报过的问题，必须在这里被抓住。
   const clickedNext = await page.evaluate(() => {

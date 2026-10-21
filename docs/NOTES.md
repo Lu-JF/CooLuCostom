@@ -308,6 +308,20 @@ HTTP 4xx/5xx 不重试。单测覆盖「只重试一次」。
 - **手动试推不计入「今日推送」**：`pushItem(item, key, countToday = false)` 只记 `pushedIds`
   （避免重复推），不占每日配额，读数不会出现 `21/2`。
 
+### 可推池为空的三层原因
+
+1. `requireAbstract` 开着，而 IEEE/Elsevier 在 Crossref 里不给 `abstract`，OpenAlex 对这些 DOI 也常查不到；
+2. 已推 / 已判不感兴趣的条目不再进入候选；
+3. `windowDays` 只放宽**抓取**范围，抓回来的老文章照样可能没有摘要，所以把它调大不等于能推更多。
+
+处理：手动推送在 `allowNoAbstractPush` 打开时退一步允许缺摘要的条目（气泡与面板注明「源未提供摘要」）；
+池底真的空了才报错，并把构成写进错误信息（总条数、已推、已判不感兴趣、缺摘要）。
+
+**`saveSettings` 的 patch 是白名单**：新加的配置字段必须同时出现在 `saveSettings` 的 patch、`view().config`
+与 `config-snapshot` 三处，否则面板保存后不生效、重启又被快照写回旧值。
+
+`TITLE_BACKFILL_PER_RUN` 调到 24，并先补未推送的条目，但它是按标题问 OpenAlex，命中率受出版社是否收录摘要限制。
+
 ### 面板为什么会显示别的论文
 
 面板不是推送的订阅者：`state` 只在挂载与动作时调用一次，`activeId` 原先只存在内存里。于是出现两种不一致：

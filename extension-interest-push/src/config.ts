@@ -61,6 +61,8 @@ export interface InterestPushConfigSection {
    * 免得把「只有标题」的条目推给使用者——那等于无效推送。
    */
   requireAbstract: boolean;
+  /** 没有可推条目时，手动推送允许推缺摘要的条目（默认关闭，自动推送始终要求摘要）。 */
+  allowNoAbstractPush: boolean;
 }
 
 export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
@@ -89,4 +91,5 @@ export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
   mailto: 'research@example.com',
   downloadDir: '',
   requireAbstract: true,
+  allowNoAbstractPush: false,
 };

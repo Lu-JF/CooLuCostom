@@ -68,7 +68,13 @@ function makeBotDir(): string {
   return dir;
 }
 
-function makeWorld(options?: { dataDir?: string; botDir?: string; log?: CallLog; persist?: (p: Partial<InterestPushConfigSection>) => void }) {
+function makeWorld(options?: {
+  dataDir?: string;
+  botDir?: string;
+  log?: CallLog;
+  persist?: (p: Partial<InterestPushConfigSection>) => void;
+  fetchImpl?: typeof fetch;
+}) {
   const dataDir = options?.dataDir ?? mkdtempSync(join(tmpdir(), 'ip-data-'));
   const botDir = options?.botDir ?? makeBotDir();
   const log = options?.log ?? { crossref: 0, model: 0 };
@@ -91,7 +97,7 @@ function makeWorld(options?: { dataDir?: string; botDir?: string; log?: CallLog;
       patches.push(patch);
       options?.persist?.(patch);
     },
-    fetchImpl: makeDeps(log),
+    fetchImpl: options?.fetchImpl ?? makeDeps(log),
     now: () => FIXED,
   });
   return { world, host: new FakeHost(), cfg, dataDir, botDir, log, patches };
@@ -611,6 +617,15 @@ describe('配置生效与缓存收敛', () => {
     expect([at.getHours(), at.getMinutes()]).toEqual([15, 35]);
   });
 
+  it('保存「允许推缺摘要」这类开关也会落到配置里', async () => {
+    const { world, host, cfg } = makeWorld();
+    await world.start(host.asHost());
+    expect(cfg.allowNoAbstractPush).toBe(false);
+    await world.invoke('settings', 'saveSettings', [{ allowNoAbstractPush: true, requireAbstract: true }], 'zh');
+    expect(cfg.allowNoAbstractPush).toBe(true);
+    expect(world.view('zh').config.allowNoAbstractPush).toBe(true);
+  });
+
   it('推送时刻落在静默时段时，视图会给出冲突清单', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
@@ -669,5 +684,66 @@ describe('推送与面板同一条', () => {
     const before = world.view('zh').revision;
     await world.invoke('detail', 'pushNow', [], 'zh');
     expect(world.view('zh').revision).toBeGreaterThan(before);
+  });
+});
+
+/** 两条期刊命中：一条带摘要、一条没有，用来看「无摘要」的兜底。 */
+function depsWithBareItem(log: CallLog): typeof fetch {
+  const bare = { ...CROSSREF_ITEM, DOI: '10.1000/bare.1', title: ['Bare record without abstract'] };
+  delete (bare as Record<string, unknown>).abstract;
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const url = String(input);
+    if (url.includes('api.crossref.org')) {
+      log.crossref += 1;
+      return new Response(JSON.stringify({ message: { items: [CROSSREF_ITEM, bare] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    if (url.endsWith('/responses')) return makeDeps(log)(input, init);
+    return new Response('{}', { status: 404 });
+  }) as unknown as typeof fetch;
+}
+
+function markPushed(dataDir: string, ids: string[]): void {
+  const file = join(dataDir, 'news', 'state.json');
+  const state = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  state.pushedIds = ids;
+  writeFileSync(file, JSON.stringify(state));
+}
+
+describe('可推池耗尽时的手动推送', () => {
+  it('只剩无摘要的条目时，立刻推一条照样推出去并说明原因', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-bare-'));
+    const probe = makeWorld({ dataDir, fetchImpl: depsWithBareItem({ crossref: 0, model: 0 }) });
+    await probe.world.start(probe.host.asHost());
+    const items = probe.world.view('zh').items;
+    const withAbstract = items.filter((i) => i.hasAbstract).map((i) => i.id);
+    expect(items.some((i) => !i.hasAbstract)).toBe(true);
+    markPushed(dataDir, withAbstract);
+
+    const { world, host, cfg } = makeWorld({ dataDir, fetchImpl: depsWithBareItem({ crossref: 0, model: 0 }) });
+    cfg.allowNoAbstractPush = true;
+    await world.start(host.asHost());
+    const out = (await world.invoke('detail', 'pushNow', [], 'zh')) as { ok: boolean; reason?: string };
+    expect(out.ok).toBe(true);
+    expect(String(out.reason ?? '')).toContain('摘要');
+    expect((world.view('zh').active?.abstract ?? 'x').trim()).toBe('');
+    expect(cfg.requireAbstract).toBe(true);
+  });
+
+  it('全推过时，错误信息给出构成而不是一句「没有可推的」', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-empty-'));
+    const probe = makeWorld({ dataDir });
+    await probe.world.start(probe.host.asHost());
+    markPushed(dataDir, probe.world.view('zh').items.map((i) => i.id));
+
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    const out = (await world.invoke('detail', 'pushNow', [], 'zh')) as { ok: boolean; reason?: string };
+    expect(out.ok).toBe(false);
+    const reason = String(out.reason ?? '');
+    expect(reason).toContain('已推');
+    expect(reason).toMatch(/\d+ 条/);
   });
 });
