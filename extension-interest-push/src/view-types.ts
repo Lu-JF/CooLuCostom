@@ -75,6 +75,8 @@ export interface InterestRecord {
 }
 
 export interface InterestPushView {
+  /** 推送或抓取合并后自增，面板轮询时据此判断要不要重画。 */
+  revision: number;
   config: {
     checkMinutes: number;
     pushTimes: string[];

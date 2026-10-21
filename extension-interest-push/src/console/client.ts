@@ -470,6 +470,21 @@ function mountDetail(ctx: ConsolePanelContext): void {
       setBusy(false);
     }
   })();
+
+  // 推送是在后台发生的：页面自己对照一次「现在讲的是哪一篇」，否则停在这里看到的是打开时那一篇。
+  ctx.interval(() => {
+    if (busy !== null || reviewing) return;
+    void (async () => {
+      try {
+        const next = (await ctx.invoke<InvokeResult>('state')).view;
+        const changed = view === null || next.revision !== view.revision || (next.active?.id ?? null) !== (view.active?.id ?? null);
+        view = next;
+        if (changed) render();
+      } catch {
+        /* 下次轮询再试 */
+      }
+    })();
+  }, 20_000);
 }
 
 // --------------------------------------------------------------------- 列表
@@ -599,6 +614,21 @@ function mountList(ctx: ConsolePanelContext): void {
       setBusy(false);
     }
   })();
+
+  // 与推送页保持同一份读数：推送、已读、速评都会让 revision 变。
+  ctx.interval(() => {
+    if (busy !== null) return;
+    void (async () => {
+      try {
+        const next = (await ctx.invoke<InvokeResult>('state')).view;
+        const changed = view === null || next.revision !== view.revision || next.items.length !== view.items.length;
+        view = next;
+        if (changed) render();
+      } catch {
+        /* 下次轮询再试 */
+      }
+    })();
+  }, 20_000);
 }
 
 // --------------------------------------------------------------------- 配置

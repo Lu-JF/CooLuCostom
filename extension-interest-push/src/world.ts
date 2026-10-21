@@ -55,6 +55,8 @@ export interface InterestPushWorldOptions {
 
 interface PersistedState {
   dismissed: string[];
+  /** 面板当前看的条目：重启后仍停在刚推送的那篇，而不是最新抓到的一篇。 */
+  activeId?: string | null;
   read: string[];
   pushedIds: string[];
   pushedDay: string;
@@ -99,6 +101,8 @@ export class InterestPushWorld implements World {
   /** 兴趣记录：编号 → 条目快照。落 `news/records.json`。 */
   private records = new Map<string, InterestRecord>();
   private activeId: string | null = null;
+  /** 每次推送或抓取合并后自增，面板据此判断是否需要重画。 */
+  private revision = 0;
   private translations = new Map<string, TranslationState>();
   private inflight: Promise<void> | null = null;
   private lastError: string | null = null;
@@ -106,6 +110,7 @@ export class InterestPushWorld implements World {
   constructor(private readonly opts: InterestPushWorldOptions) {
     this.seen = new SeenStore(opts.dataDir);
     this.state = this.loadState();
+    this.activeId = this.state.activeId ?? null;
     this.items = this.loadItems();
     this.records = this.loadRecords();
   }
@@ -298,6 +303,7 @@ export class InterestPushWorld implements World {
       }
     }
     this.saveState();
+    this.revision += 1;
     this.saveItems();
     this.pruneCaches();
     this.writeConfigSnapshot();
@@ -537,6 +543,7 @@ export class InterestPushWorld implements World {
     this.state.lastWindowKey = windowKey ?? this.state.lastWindowKey;
     // 页签跟到刚推的这篇：「推送」页看到的就是气泡刚讲的那一篇，两处永远一致。
     this.activeId = item.id;
+    this.revision += 1;
     this.log(`已推送 ${item.id}：${item.title.slice(0, 40)}`);
   }
 
@@ -752,6 +759,7 @@ export class InterestPushWorld implements World {
         review: this.reviewThumb(item.id),
       })),
       active,
+      revision: this.revision,
       translation: active ? (this.translations.get(active.id) ?? null) : null,
       review: active ? this.reviewStateOf(active.id) : null,
       lastError: this.lastError,
@@ -1040,6 +1048,7 @@ export class InterestPushWorld implements World {
   private saveState(): void {
     try {
       mkdirSync(dirname(this.dataFile('state.json')), { recursive: true });
+      this.state.activeId = this.activeId;
       writeFileSync(this.dataFile('state.json'), `${JSON.stringify(this.state, null, 2)}\n`, 'utf8');
     } catch {
       /* 落盘失败不影响本次动作 */

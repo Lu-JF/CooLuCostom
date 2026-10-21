@@ -648,3 +648,26 @@ describe('配置生效与缓存收敛', () => {
     expect(existsSync(join(dataDir, 'news', 'translated', 'gone0001.json'))).toBe(false);
   });
 });
+
+describe('推送与面板同一条', () => {
+  it('重启后仍停在刚推送的那篇，不改回最新一条', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-active-'));
+    const first = makeWorld({ dataDir });
+    await first.world.start(first.host.asHost());
+    await first.world.invoke('detail', 'pushNow', [], 'zh');
+    const pushed = first.world.view('zh').active?.id ?? null;
+    expect(pushed).not.toBeNull();
+
+    const again = makeWorld({ dataDir });
+    await again.world.start(again.host.asHost());
+    expect(again.world.view('zh').active?.id).toBe(pushed);
+  });
+
+  it('推送与抓取都会让 revision 变化', async () => {
+    const { world, host } = makeWorld();
+    await world.start(host.asHost());
+    const before = world.view('zh').revision;
+    await world.invoke('detail', 'pushNow', [], 'zh');
+    expect(world.view('zh').revision).toBeGreaterThan(before);
+  });
+});

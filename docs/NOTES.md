@@ -308,6 +308,17 @@ HTTP 4xx/5xx 不重试。单测覆盖「只重试一次」。
 - **手动试推不计入「今日推送」**：`pushItem(item, key, countToday = false)` 只记 `pushedIds`
   （避免重复推），不占每日配额，读数不会出现 `21/2`。
 
+### 面板为什么会显示别的论文
+
+面板不是推送的订阅者：`state` 只在挂载与动作时调用一次，`activeId` 原先只存在内存里。于是出现两种不一致：
+
+- 页面从早开到晚，后台推送了新的，页面仍停在自己打开时那一条；
+- 进程重启后 `activeId` 为 `null`，`activeItem()` 落回 `items[0]`，即最新抓到的一篇。
+
+处理：`activeId` 写进 `state.json`；`view.revision` 在推送与抓取合并后自增；详情页与列表页各自 20 秒调用一次
+`state`，`revision` 或 `active.id` 变了才重画，`busy` 期间跳过。核对脚本 `scripts/dump-panel.mjs --watch`
+会先打印当前页面标题，再通过接口推一条，等轮询把标题换过来。
+
 ### 定时器与配置
 
 - **改配置必须重排定时器**：推送用 `setTimeout` 排到 `nextWindowAt()`，只在启动与每次窗口后重排。
