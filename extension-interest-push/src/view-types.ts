@@ -10,6 +10,10 @@ export interface NewsItem {
   authors: string[];
   /** 作者机构（OpenAlex 的 authorships，最多三个）。 */
   affiliation: string | null;
+  /** 正式发表处：期刊名或会议名；预印本为 null。 */
+  venue: string | null;
+  /** 机构查过但查不到（OpenAlex 有记录、没有机构）：这类不进候选池。 */
+  affiliationChecked?: boolean;
   journal: string;
   journalIssn: string | null;
   tier: string | null;
@@ -33,6 +37,8 @@ export interface NewsRow {
   unread: boolean;
   /** 源是否给了摘要；没给的条目在列表里标出来，免得点进去才发现。 */
   hasAbstract: boolean;
+  /** 正式发表处；null 表示预印本。 */
+  venue: string | null;
   /** 大肥鱼速评摘要（列表里只放评语与总分，没有就是 null）。 */
   review: { total: number; text: string } | null;
 }

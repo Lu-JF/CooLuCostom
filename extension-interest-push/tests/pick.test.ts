@@ -4,11 +4,12 @@
  * 没有带摘要的就一个都不推。
  */
 import { describe, expect, it } from 'vitest';
-import { isPushable, pickManualCandidate, pickPushCandidate } from '../src/pick.ts';
+import { isPushable, keepsInPool, pickManualCandidate, pickPushCandidate, sortForList } from '../src/pick.ts';
 import type { NewsItem } from '../src/view-types.ts';
 
 const base = {
-  doi: null, title: 'T', authors: [], affiliation: null, journal: 'Measurement', journalIssn: null, tier: null,
+  doi: null, title: 'T', authors: [], affiliation: null,
+    venue: null, journal: 'Measurement', journalIssn: null, tier: null,
   issued: '2026-10-01', url: 'https://example.org', pdfUrl: null, source: 'crossref' as const,
   sourceDetail: 'crossref', foundAt: 1, abstract: 'Abstract.',
 };
@@ -77,5 +78,25 @@ describe('「立刻推一条」挑哪条', () => {
     expect(isPushable(item('a'), { ...none, dismissed: ['a'] })).toBe(false);
     expect(isPushable(item('a', ''), none)).toBe(false);
     expect(isPushable(item('a', ''), { ...none, requireAbstract: false })).toBe(true);
+  });
+});
+
+describe('列表排序与候选池', () => {
+  const base = { doi: null, title: 'T', authors: [], affiliation: 'X', venue: null, journal: 'Measurement', journalIssn: null, tier: null, issued: '2026-10-01', abstract: 'A', url: 'u', pdfUrl: null, source: 'crossref' as const, sourceDetail: 'd', foundAt: 0 };
+
+  it('已见刊的排在预印本前面，同组内按上线日期倒序', () => {
+    const items = [
+      { ...base, id: 'a', venue: null, issued: '2026-10-19' },
+      { ...base, id: 'b', venue: 'Measurement', issued: '2026-09-30' },
+      { ...base, id: 'c', venue: null, issued: '2026-10-10' },
+    ];
+    expect(sortForList(items).map((i) => i.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('机构查过但没有的条目出池，没查过的与已推过的保留', () => {
+    expect(keepsInPool({ ...base, id: 'a', affiliation: null, affiliationChecked: true }, [])).toBe(false);
+    expect(keepsInPool({ ...base, id: 'b', affiliation: null }, [])).toBe(true);
+    expect(keepsInPool({ ...base, id: 'c', affiliation: null, affiliationChecked: true }, ['c'])).toBe(true);
+    expect(keepsInPool({ ...base, id: 'd', affiliation: 'Southeast University', affiliationChecked: true }, [])).toBe(true);
   });
 });

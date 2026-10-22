@@ -24,6 +24,7 @@ const ITEM: NewsItem = {
   title: 'Bearing fault diagnosis under variable speed using a lightweight network',
   authors: ['Jane Doe'],
   affiliation: null,
+    venue: null,
   journal: 'Mechanical Systems and Signal Processing',
   journalIssn: '0888-3270',
   tier: '中科院一区 · JCR Q1',

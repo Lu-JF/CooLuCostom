@@ -73,6 +73,7 @@ try {
     title: document.querySelector('.ip-ov-title')?.textContent?.trim() ?? '',
     score: document.querySelector('.ip-score')?.textContent?.trim() ?? '',
     doi: [...document.querySelectorAll('.ip-detail tr')].map((tr) => tr.textContent ?? '').find((x) => x.includes('DOI')) ?? '',
+    kv: [...document.querySelectorAll('.ip-detail tr')].map((tr) => (tr.textContent ?? '').replace(/\s+/g, ' ').trim()),
   }));
   const state = await page.evaluate(async (pageId) => {
     const res = await fetch(`/api/webui/providers/${pageId}/panels/detail/state`, {
@@ -86,6 +87,7 @@ try {
   console.log('页面标题：', seen.title);
   console.log('页面分数：', seen.score);
   console.log('详情行：', seen.doi);
+  console.log('详情字段：', seen.kv.join(' | '));
   console.log('接口 active：', state.active?.id, '|', state.active?.title);
 
   // --watch：先推一条，等面板自己轮询过来，看页面标题是否跟着换。

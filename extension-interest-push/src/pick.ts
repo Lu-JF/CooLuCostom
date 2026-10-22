@@ -41,3 +41,22 @@ export function pickManualCandidate(items: NewsItem[], active: NewsItem | null, 
   const ordered = at === -1 ? items : [...items.slice(at + 1), ...items.slice(0, at + 1)];
   return ordered.find((i) => isPushable(i, opts)) ?? null;
 }
+
+/** 列表排序：已见刊在前，其次按上线日期倒序。 */
+export function sortForList(items: NewsItem[]): NewsItem[] {
+  return [...items].sort(
+    (a, b) =>
+      Number(b.venue !== null) - Number(a.venue !== null) ||
+      b.issued.localeCompare(a.issued) ||
+      b.foundAt - a.foundAt,
+  );
+}
+
+/**
+ * 机构未知的条目不该留在候选池里：查过（`affiliationChecked`）却拿不到机构，说明这条没有可核实的来源。
+ * 没查过的（比如 OpenAlex 额度用尽）保留，不能因为查不到就误删。已推过的也保留，别动历史。
+ */
+export function keepsInPool(item: NewsItem, pushedIds: string[]): boolean {
+  const unknown = item.affiliationChecked === true && (item.affiliation ?? '').trim() === '';
+  return !unknown || pushedIds.includes(item.id);
+}

@@ -99,6 +99,14 @@ function joinAuthors(author: unknown): string[] {
   return dedupe(names);
 }
 
+/** 把 arXiv 的 journal_ref 收成刊名：去掉年份、卷期、页码。 */
+export function shortVenue(ref: string): string {
+  const text = ref.replace(/\s+/g, ' ').trim();
+  if (text === '') return '';
+  const cut = text.split(/[,;]\s*(?:\d{4}|vol\.|volume|pp\.|pages)/i)[0] ?? text;
+  return cut.replace(/\s*\d{4}\s*$/, '').trim();
+}
+
 /** 第一个非空 `affiliation[0].name`。 */
 function firstAffiliation(author: unknown): string | null {
   if (!Array.isArray(author)) return null;
@@ -172,6 +180,7 @@ export function normalizeCrossref(
     title,
     authors: joinAuthors(work.author),
     affiliation: firstAffiliation(work.author),
+    venue: normalizeText(work['container-title']) || null,
     journal: normalizeText(work['container-title']),
     journalIssn: ctx.issn ? ctx.issn : null,
     tier: ctx.tier,
@@ -187,19 +196,31 @@ export function normalizeCrossref(
 
 /** 规范化一条 arXiv RSS 条目。 */
 export function normalizeArxiv(
-  entry: { title: string; link: string; summary: string; published: string; authors: string[] },
+  entry: {
+    title: string;
+    link: string;
+    summary: string;
+    published: string;
+    authors: string[];
+    journalRef?: string;
+    doi?: string;
+  },
   ctx: { category: string },
 ): NewsItem {
   const title = normalizeText(entry?.title);
   const issued = toISODate(entry?.published);
   const link = normalizeText(entry?.link);
+  const journalRef = normalizeText(entry?.journalRef);
+  const publishedDoi = normalizeText(entry?.doi).replace(/^https?:\/\/doi\.org\//i, '');
   const authors = dedupe((entry?.authors ?? []).map((a) => normalizeText(a)));
   return {
     id: sha1Short(title + issued),
-    doi: null,
+    doi: publishedDoi === '' ? null : publishedDoi,
     title,
     authors,
     affiliation: null,
+    // 见刊后 arXiv 会补 journal_ref / doi，这两样是「已发表」的硬证据。
+    venue: journalRef === '' ? null : shortVenue(journalRef),
     journal: ctx.category ? `arXiv ${ctx.category}` : 'arXiv',
     journalIssn: null,
     tier: null,
@@ -232,6 +253,7 @@ export function normalizeHf(
     title,
     authors,
     affiliation: null,
+    venue: null,
     journal: 'Hugging Face Daily Papers',
     journalIssn: null,
     tier: null,

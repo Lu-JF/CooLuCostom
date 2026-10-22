@@ -416,6 +416,8 @@ function mountDetail(ctx: ConsolePanelContext): void {
         { k: t.detail.issued, v: item.issued },
         { k: t.detail.authors, v: item.authors.length > 0 ? item.authors.join('、') : t.detail.none },
         { k: t.detail.affiliation, v: item.affiliation ?? t.detail.none },
+        // 期刊论文的「发表」就是上面那本刊，重复一遍没信息量；这里只在预印本见刊时写刊名。
+        { k: t.detail.venue, v: item.venue === null ? t.detail.preprint : item.venue === item.journal ? t.detail.published : item.venue },
         { k: t.detail.doi, v: item.doi ?? t.detail.none },
         { k: t.detail.source, v: item.sourceDetail },
       ]),
@@ -558,6 +560,7 @@ function mountList(ctx: ConsolePanelContext): void {
       // 只标「已读」，未读靠没有标记来区分。
       if (!row.unread) head.append(ui.pill(t.list.read, 'plain'));
       if (!row.hasAbstract) head.append(ui.pill(t.list.noAbstract, 'plain'));
+      head.append(ui.pill(row.venue ?? t.list.preprint, row.venue === null ? 'plain' : 'on'));
       // 速评一行：评过的显示星星与评语，没评过的给个按钮现评——评一次就落盘，两个页签共用同一份。
       const revRow = ui.h('div', 'ip-review-row');
       const rev = row.review;

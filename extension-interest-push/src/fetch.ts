@@ -385,7 +385,8 @@ export async function fetchOpenAlexInstitutions(dois: string[], deps: FetchDeps)
           .replace(/^https?:\/\/doi\.org\//i, '')
           .toLowerCase();
         const names = institutionsOf(row);
-        if (doi !== '' && names.length > 0) out[doi] = names.join('、');
+        // 命中就算查过：有记录但没机构，与「查不到这条记录」要分开。
+        if (doi !== '') out[doi] = names.join('、');
       }
     } catch {
       /* 这一批失败就跳过 */
@@ -395,9 +396,9 @@ export async function fetchOpenAlexInstitutions(dois: string[], deps: FetchDeps)
 }
 
 /** 按标题在 OpenAlex 取机构（预印本没有 DOI 时用）。 */
-export async function fetchOpenAlexInstitutionsByTitle(title: string, deps: FetchDeps): Promise<string> {
+export async function fetchOpenAlexInstitutionsByTitle(title: string, deps: FetchDeps): Promise<string | null> {
   const clean = title.replace(/\s+/g, ' ').trim();
-  if (clean.length < 12) return '';
+  if (clean.length < 12) return null;
   const doFetch = resolveFetch(deps);
   try {
     const url = withOpenAlexKey(
@@ -407,18 +408,17 @@ export async function fetchOpenAlexInstitutionsByTitle(title: string, deps: Fetc
       deps,
     );
     const res = await doFetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) return '';
+    if (!res.ok) return null;
     const body = (await res.json()) as { results?: unknown[] };
     const norm = (v: unknown): string => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
     const want = norm(clean);
     for (const row of body?.results ?? []) {
       const got = norm((row as { title?: unknown } | null)?.title);
       if (got === '' || !(got === want || got.includes(want) || want.includes(got))) continue;
-      const names = institutionsOf(row);
-      if (names.length > 0) return names.join('、');
+      return institutionsOf(row).join('、');
     }
   } catch {
     /* 查不到就算了 */
   }
-  return '';
+  return null;
 }

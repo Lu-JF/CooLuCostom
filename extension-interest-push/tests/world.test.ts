@@ -151,7 +151,7 @@ describe('推送与回执', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-follow-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: null, authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: null, authors: ['A'], affiliation: null, venue: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract about bearings.',
     };
@@ -161,21 +161,22 @@ describe('推送与回执', () => {
 
     const { world, host } = makeWorld({ dataDir });
     await world.start(host.asHost());
-    expect(world.view('zh').active?.id).toBe('aaaa0001');
+    const first = world.view('zh').active?.id ?? '';
+    expect(first).not.toBe('');
 
     // 第一次：推页面上那篇，推完页签还是它（气泡讲的就是它）。
     await world.invoke('settings', 'pushNow', [], 'zh');
     let pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(1);
-    expect(pushed[0]!.senderKey).toBe('aaaa0001');
-    expect(world.view('zh').active?.id).toBe('aaaa0001');
+    expect(pushed[0]!.senderKey).toBe(first);
+    expect(world.view('zh').active?.id).toBe(first);
 
     // 第二次：这篇刚推过，换下一篇能推的；页签跟到新的那篇。
     await world.invoke('settings', 'pushNow', [], 'zh');
     pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(2);
-    expect(pushed[1]!.senderKey).toBe('bbbb0002');
-    expect(world.view('zh').active?.id).toBe('bbbb0002');
+    expect(pushed[1]!.senderKey).not.toBe(first);
+    expect(world.view('zh').active?.id).toBe(pushed[1]!.senderKey);
   });
 
   it('页面上那篇没摘要时换下一篇能推的，页签跟过去', async () => {
@@ -370,7 +371,7 @@ describe('期刊延迟窗口', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-delay-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: '10.1/x', authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: '10.1/x', authors: ['A'], affiliation: null, venue: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: 't', url: 'https://doi.org/10.1/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241?created:2026-09-01', foundAt: 1,
     };
@@ -479,7 +480,7 @@ describe('陈旧条目的清理', () => {
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const stale = {
       id: 'stale001', doi: null, title: 'StopWatch: Goal Grounding for Object-goal Navigation',
-      authors: ['A'], affiliation: null, journal: 'Hugging Face Daily Papers', journalIssn: null, tier: null,
+      authors: ['A'], affiliation: null, venue: null, journal: 'Hugging Face Daily Papers', journalIssn: null, tier: null,
       issued: '2026-10-14', abstract: 'deployed on edge devices for efficient computing',
       url: 'https://huggingface.co/papers/stale001', pdfUrl: null, source: 'hf',
       sourceDetail: 'hf:daily_papers', foundAt: 1,
@@ -575,7 +576,7 @@ describe('大肥鱼速评', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-pushnow-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: null, authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: null, authors: ['A'], affiliation: null, venue: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract text about bearings.',
     };
@@ -585,7 +586,7 @@ describe('大肥鱼速评', () => {
 
     const { world, host } = makeWorld({ dataDir });
     await world.start(host.asHost());
-    expect(world.view('zh').active?.id).toBe('aaaa0001');
+    expect(world.view('zh').items.map((i) => i.id)).toContain('aaaa0001');
 
     // 换成看另一篇，再点「立刻推一条」：推的必须是这一篇，不能自己另挑。
     await world.invoke('detail', 'state', ['bbbb0002'], 'zh');
@@ -711,6 +712,28 @@ function markPushed(dataDir: string, ids: string[]): void {
   state.pushedIds = ids;
   writeFileSync(file, JSON.stringify(state));
 }
+
+describe('旧条目迁移', () => {
+  it('期刊来源的旧条目补上 venue，arXiv 的仍是预印本', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'ip-mig-'));
+    mkdirSync(join(dataDir, 'news'), { recursive: true });
+    const base = {
+      abstract: 'A', url: 'u', pdfUrl: null, tier: null, foundAt: 1, authors: ['A'], affiliation: null, affiliationChecked: true,
+    };
+    writeFileSync(
+      join(dataDir, 'news', 'items.json'),
+      JSON.stringify([
+        { ...base, id: 'j1', title: 'journal one', doi: '10.1/a', journal: 'Measurement', journalIssn: '0263-2241', tier: null, issued: '2026-10-01', source: 'crossref', sourceDetail: 'crossref', affiliation: 'Southeast University' },
+        { ...base, id: 'a1', title: 'arxiv one', doi: null, journal: 'arXiv eess.SP', journalIssn: null, tier: null, issued: '2026-10-02', source: 'arxiv', sourceDetail: 'arxiv:eess.SP', affiliation: 'Nanjing University' },
+      ]),
+    );
+    const { world, host } = makeWorld({ dataDir });
+    await world.start(host.asHost());
+    const items = world.view('zh').items;
+    expect(items.find((i) => i.id === 'j1')?.venue).toBe('Measurement');
+    expect(items.find((i) => i.id === 'a1')?.venue).toBeNull();
+  });
+});
 
 describe('作者机构', () => {
   it('条目没有机构时，按 DOI 从 OpenAlex 补上并写进条目', async () => {

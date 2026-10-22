@@ -19,5 +19,6 @@ export const INTEREST_PUSH: WorldDefinition<InterestPushConfigSection> = {
     dataDir: ctx.dataDir,
     botDir: ctx.botDir,
     persist: (patch) => ctx.persist(patch),
+    secret: (name) => ctx.secret(name),
   }),
 };

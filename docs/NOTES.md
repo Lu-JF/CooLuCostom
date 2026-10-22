@@ -308,6 +308,21 @@ HTTP 4xx/5xx 不重试。单测覆盖「只重试一次」。
 - **手动试推不计入「今日推送」**：`pushItem(item, key, countToday = false)` 只记 `pushedIds`
   （避免重复推），不占每日配额，读数不会出现 `21/2`。
 
+### 已见刊、预印本与机构未知
+
+- **已见刊**：Crossref 条目直接算已发表（`venue` = 刊名）；arXiv 条目看 `arxiv:journal_ref` 与 `arxiv:doi`，
+  有其一就算见刊，`venue` 取 `journal_ref` 去掉年份卷期后的刊名。没有就是预印本。
+- **排序**：`sortForList()` 先按「是否见刊」再按日期。**不要再在后面链一个 `.sort()`**，
+  否则会把见刊优先整个覆盖掉（这个坑踩过一次）。
+- **机构未知**：`affiliationChecked` 只在 OpenAlex 真的返回这条记录时置位。查过但没有机构 → 从列表剔除；
+  没查过（额度用尽、网络失败）不剔，避免把整张表清空。已推过的条目无论机构如何都保留。
+- **旧数据迁移**：早期条目没有 `venue`，启动时按来源补一次（Crossref 补刊名，arXiv 置空）。
+
+### OpenAlex 的 key 放哪
+
+`host.secret(name)` 读的是**部署目录**的 `.env`，即 `data/home/companion/.env`，不是 `data/home/.env`。
+写成 `OPENALEX_API_KEY=…` 一行即可，代码里通过 `ctx.secret` 取，不落项目文件。
+
 ### 作者机构
 
 机构取 OpenAlex 的 `authorships[].institutions[].display_name`，去重后最多三个；Crossref 自带 `affiliation`

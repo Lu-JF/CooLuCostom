@@ -28,7 +28,7 @@ import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
-import { pickManualCandidate, pickPushCandidate, type PickOptions } from './pick.ts';
+import { keepsInPool, pickManualCandidate, pickPushCandidate, sortForList, type PickOptions } from './pick.ts';
 import { readReview, reviewItem } from './review.ts';
 import { decide, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
@@ -56,6 +56,8 @@ export interface InterestPushWorldOptions {
   botDir: string;
   /** 写回自己的配置段（面板上的「保存」走它，一次写回）。 */
   persist: (patch: Partial<InterestPushConfigSection>) => void;
+  /** 读框架的秘密存储（部署 .env）。 */
+  secret?: (name: string) => string;
   /** 测试注入：网络与时钟。 */
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -123,6 +125,7 @@ export class InterestPushWorld implements World {
     this.state = this.loadState();
     this.activeId = this.state.activeId ?? null;
     this.items = this.loadItems();
+    this.migrateItems();
     this.records = this.loadRecords();
   }
 
@@ -327,8 +330,8 @@ export class InterestPushWorld implements World {
       fetchImpl: this.opts.fetchImpl ?? fetch,
       mailto: this.opts.cfg.mailto,
       // 可选：这两个免费额度按 IP 共享，有 key 才稳。走环境变量，不落盘。
-      openAlexKey: process.env.OPENALEX_API_KEY ?? '',
-      semanticScholarKey: process.env.S2_API_KEY ?? '',
+      openAlexKey: (this.opts.secret?.('OPENALEX_API_KEY') ?? '') || (process.env.OPENALEX_API_KEY ?? ''),
+      semanticScholarKey: (this.opts.secret?.('S2_API_KEY') ?? '') || (process.env.S2_API_KEY ?? ''),
     };
   }
 
@@ -403,9 +406,12 @@ export class InterestPushWorld implements World {
       for (const item of withDoi) {
         const hit = byDoi[(item.doi as string).toLowerCase()];
         if (hit !== undefined) {
-          item.affiliation = hit;
-          item.sourceDetail = `${item.sourceDetail} +openalex机构`;
-          filled += 1;
+          item.affiliationChecked = true;
+          if (hit !== '') {
+            item.affiliation = hit;
+            item.sourceDetail = `${item.sourceDetail} +openalex机构`;
+            filled += 1;
+          }
         }
       }
       if (filled > 0) this.log(`补了 ${filled} 条机构`);
@@ -419,11 +425,18 @@ export class InterestPushWorld implements World {
     for (const item of byTitle) {
       tried[item.id] = now;
       const names = await fetchOpenAlexInstitutionsByTitle(item.title, deps);
-      if (names !== '') {
-        item.affiliation = names;
-        item.sourceDetail = `${item.sourceDetail} +openalex标题机构`;
+      if (names !== null) {
+        item.affiliationChecked = true;
+        if (names !== '') {
+          item.affiliation = names;
+          item.sourceDetail = `${item.sourceDetail} +openalex标题机构`;
+        }
       }
     }
+    const before = this.items.length;
+    this.items = this.items.filter((i) => keepsInPool(i, this.state.pushedIds));
+    if (this.items.length < before) this.log(`机构未知，去掉 ${before - this.items.length} 条`);
+    this.saveItems();
     this.saveState();
   }
 
@@ -505,9 +518,7 @@ export class InterestPushWorld implements World {
     if (fresh.length > 0) this.seen.save();
     if (improved > 0) this.log(`更新了 ${improved} 条的摘要`);
     for (const item of fresh) byId.set(item.id, item);
-    this.items = [...byId.values()]
-      .sort((a, b) => (a.issued === b.issued ? b.foundAt - a.foundAt : b.issued.localeCompare(a.issued)))
-      .slice(0, MAX_ITEMS);
+    this.items = sortForList([...byId.values()]).slice(0, MAX_ITEMS);
     this.log(`本轮抓到 ${found.length} 条，其中新的 ${fresh.length} 条`);
   }
 
@@ -821,6 +832,7 @@ export class InterestPushWorld implements World {
         source: item.source,
         unread: !this.state.read.includes(item.id),
         hasAbstract: item.abstract.trim() !== '',
+        venue: item.venue,
         review: this.reviewThumb(item.id),
       })),
       active,
@@ -1102,6 +1114,18 @@ export class InterestPushWorld implements World {
       const p = parseTime(text);
       return p !== null && inside(p.h * 60 + p.m);
     });
+  }
+
+  /** 旧条目没有 venue：期刊来源的补上刊名，其余按预印本处理。只写一次。 */
+  private migrateItems(): void {
+    let changed = false;
+    for (const item of this.items) {
+      if (item.venue === undefined) {
+        item.venue = item.source === 'crossref' && item.journal !== '' ? item.journal : null;
+        changed = true;
+      }
+    }
+    if (changed) this.saveItems();
   }
 
   private loadState(): PersistedState {

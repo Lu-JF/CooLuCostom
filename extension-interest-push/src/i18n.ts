@@ -32,6 +32,8 @@ export interface InterestText {
     empty: string;
     read: string;
     noAbstract: string;
+    published: string;
+    preprint: string;
     dismissed: string;
     error: (reason: string) => string;
     hint: string;
@@ -56,6 +58,9 @@ export interface InterestText {
     next: string;
     authors: string;
     affiliation: string;
+    venue: string;
+    preprint: string;
+    published: string;
     journal: string;
     issued: string;
     doi: string;
@@ -187,6 +192,8 @@ const zh: InterestText = {
     empty: '还没有抓到条目。检查一次，或把关键词和期刊放宽些。',
     read: '已读',
     noAbstract: '无摘要',
+    published: '已见刊',
+    preprint: '预印本',
     dismissed: '不再推送',
     error: (reason) => `上次检查出错：${reason}`,
     hint: '订阅的论文经气泡对话介绍；完整信息在此查看。',
@@ -211,6 +218,9 @@ const zh: InterestText = {
     next: '换一篇',
     authors: '作者',
     affiliation: '机构',
+    venue: '发表',
+    preprint: '预印本',
+    published: '已见刊',
     journal: '期刊',
     issued: '上线',
     doi: 'DOI',
@@ -342,6 +352,8 @@ const en: InterestText = {
     empty: 'Nothing crawled yet. Run a check, or widen the keywords and journals.',
     read: 'read',
     noAbstract: 'no abstract',
+    published: 'Published',
+    preprint: 'Preprint',
     dismissed: 'not pushed again',
     error: (reason) => `Last check failed: ${reason}`,
     hint: 'Subscribed papers are introduced in a bubble chat; details live here.',
@@ -366,6 +378,9 @@ const en: InterestText = {
     next: 'Next paper',
     authors: 'Authors',
     affiliation: 'Institution',
+    venue: 'Published in',
+    preprint: 'Preprint',
+    published: 'Published',
     journal: 'Venue',
     issued: 'Published',
     doi: 'DOI',

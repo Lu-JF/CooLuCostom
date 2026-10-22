@@ -27,6 +27,10 @@ interface AtomEntry {
   authors: string[];
   /** 主分类，例如 eess.SP；取不到时为空串。 */
   category: string;
+  /** 正式发表信息（arxiv:journal_ref），预印本为空串。 */
+  journalRef: string;
+  /** 正式发表版本的 DOI（arxiv:doi），预印本为空串。 */
+  doi: string;
 }
 
 /** 取某个标签的文本（去标签、压空白）；没有返回空串。 */
@@ -66,6 +70,8 @@ export function parseArxivAtom(xml: string): AtomEntry[] {
       published: tag(block, 'published'),
       authors: tags(block, 'name'),
       category: category.trim(),
+      journalRef: tag(block, 'arxiv:journal_ref'),
+      doi: tag(block, 'arxiv:doi'),
     });
   }
   return out;

@@ -152,3 +152,30 @@ describe('normalizeHf', () => {
     expect(item.sourceDetail).toBe('hf:daily_papers');
   });
 });
+
+describe('已见刊判定', () => {
+  it('arXiv 带 journal_ref 就算已见刊，刊名去掉年份与卷期', () => {
+    const item = normalizeArxiv(
+      {
+        title: 'T',
+        link: 'https://arxiv.org/abs/2610.00001',
+        summary: 'S',
+        published: '2026-09-01T00:00:00Z',
+        authors: ['A'],
+        journalRef: 'Mechanical Systems and Signal Processing, 2026, 210: 111234',
+        doi: '10.1016/j.ymssp.2026.111234',
+      },
+      { category: 'eess.SP' },
+    );
+    expect(item.venue).toBe('Mechanical Systems and Signal Processing');
+    expect(item.doi).toBe('10.1016/j.ymssp.2026.111234');
+  });
+
+  it('没有 journal_ref 就是预印本', () => {
+    const item = normalizeArxiv(
+      { title: 'T', link: 'https://arxiv.org/abs/2610.00002', summary: 'S', published: '2026-09-02T00:00:00Z', authors: ['A'] },
+      { category: 'eess.SP' },
+    );
+    expect(item.venue).toBeNull();
+  });
+});
