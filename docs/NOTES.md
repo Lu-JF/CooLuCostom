@@ -308,6 +308,16 @@ HTTP 4xx/5xx 不重试。单测覆盖「只重试一次」。
 - **手动试推不计入「今日推送」**：`pushItem(item, key, countToday = false)` 只记 `pushedIds`
   （避免重复推），不占每日配额，读数不会出现 `21/2`。
 
+### 作者机构
+
+机构取 OpenAlex 的 `authorships[].institutions[].display_name`，去重后最多三个；Crossref 自带 `affiliation`
+时先用 Crossref 的。预印本没有 DOI，按标题在 OpenAlex 检索后取同一套字段。
+
+**补机构必须放在 `merge` 之后**：`collect()` 阶段 `this.items` 还是上一轮的名单，在那里遍历会得到空列表。
+
+OpenAlex 的免费额度按出口 IP 共享，用尽时摘要与机构都会静默失败（返回 `error`，代码按「查不到」处理），
+额度在 UTC 零点重置。长期使用应配置 `OPENALEX_API_KEY`（只读环境变量）。
+
 ### 可推池为空的三层原因
 
 1. `requireAbstract` 开着，而 IEEE/Elsevier 在 Crossref 里不给 `abstract`，OpenAlex 对这些 DOI 也常查不到；

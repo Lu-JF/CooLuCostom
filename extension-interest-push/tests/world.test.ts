@@ -151,7 +151,7 @@ describe('推送与回执', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-follow-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: null, authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: null, authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract about bearings.',
     };
@@ -370,7 +370,7 @@ describe('期刊延迟窗口', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-delay-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: '10.1/x', authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: '10.1/x', authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: 't', url: 'https://doi.org/10.1/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241?created:2026-09-01', foundAt: 1,
     };
@@ -479,7 +479,7 @@ describe('陈旧条目的清理', () => {
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const stale = {
       id: 'stale001', doi: null, title: 'StopWatch: Goal Grounding for Object-goal Navigation',
-      authors: ['A'], team: null, journal: 'Hugging Face Daily Papers', journalIssn: null, tier: null,
+      authors: ['A'], affiliation: null, journal: 'Hugging Face Daily Papers', journalIssn: null, tier: null,
       issued: '2026-10-14', abstract: 'deployed on edge devices for efficient computing',
       url: 'https://huggingface.co/papers/stale001', pdfUrl: null, source: 'hf',
       sourceDetail: 'hf:daily_papers', foundAt: 1,
@@ -575,7 +575,7 @@ describe('大肥鱼速评', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-pushnow-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const base = {
-      doi: null, authors: ['A'], team: null, journal: 'Measurement', journalIssn: '0263-2241',
+      doi: null, authors: ['A'], affiliation: null, journal: 'Measurement', journalIssn: '0263-2241',
       tier: '中科院一区', url: 'https://example.org/x', pdfUrl: null, source: 'crossref' as const,
       sourceDetail: 'crossref:0263-2241', foundAt: 1, abstract: 'Abstract text about bearings.',
     };
@@ -711,6 +711,56 @@ function markPushed(dataDir: string, ids: string[]): void {
   state.pushedIds = ids;
   writeFileSync(file, JSON.stringify(state));
 }
+
+describe('作者机构', () => {
+  it('条目没有机构时，按 DOI 从 OpenAlex 补上并写进条目', async () => {
+    const log = { crossref: 0, model: 0 };
+    const base = makeDeps(log);
+    // Crossref 这条不给 affiliation，模拟 Elsevier 的常见情况。
+    const bareCrossref = {
+      ...CROSSREF_ITEM,
+      DOI: '10.1016/j.ymssp.2026.777777',
+      author: [{ given: 'Jane', family: 'Doe' }],
+    };
+    const seen: string[] = [];
+    const mock = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const url = String(input);
+      seen.push(url.slice(0, 70));
+      if (url.includes('api.crossref.org')) {
+        return new Response(JSON.stringify({ message: { items: [bareCrossref] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.includes('api.openalex.org') && url.includes('authorships')) {
+        return new Response(
+          JSON.stringify({
+            results: [
+              {
+                doi: 'https://doi.org/10.1016/j.ymssp.2026.777777',
+                authorships: [
+                  { institutions: [{ display_name: 'Southeast University' }] },
+                  { institutions: [{ display_name: 'Nanjing University' }] },
+                ],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      if (url.includes('api.openalex.org')) {
+        return new Response(JSON.stringify({ results: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return base(input, init);
+    }) as unknown as typeof fetch;
+
+    const { world, host } = makeWorld({ fetchImpl: mock });
+    await world.start(host.asHost());
+    const item = world.view('zh').active;
+    expect(seen.some((u) => u.includes('api.openalex.org'))).toBe(true);
+    expect(item?.affiliation).toBe('Southeast University、Nanjing University');
+  });
+});
 
 describe('可推池耗尽时的手动推送', () => {
   it('只剩无摘要的条目时，立刻推一条照样推出去并说明原因', async () => {

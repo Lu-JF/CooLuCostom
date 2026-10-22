@@ -15,7 +15,15 @@ import type { Language } from 'cortico/core/language.ts';
 import type { World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import type { InterestPushConfigSection, JournalEntry } from './config.ts';
-import { fetchHfDaily, fetchJournal, fetchOpenAlexAbstractByTitle, fetchOpenAlexAbstracts, fetchSemanticScholarAbstracts } from './fetch.ts';
+import {
+  fetchHfDaily,
+  fetchJournal,
+  fetchOpenAlexAbstractByTitle,
+  fetchOpenAlexAbstracts,
+  fetchOpenAlexInstitutions,
+  fetchOpenAlexInstitutionsByTitle,
+  fetchSemanticScholarAbstracts,
+} from './fetch.ts';
 import { fetchArxivSearch } from './arxiv.ts';
 import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
@@ -68,6 +76,8 @@ interface PersistedState {
   conditional: Record<string, { etag?: string; lastModified?: string }>;
   /** 条目编号 → 上次按标题补摘要的时刻；避免对同一篇反复去问。 */
   abstractTried: Record<string, number>;
+  /** 条目编号 → 上次按标题问机构的时刻。 */
+  affiliationTried?: Record<string, number>;
 }
 
 const EMPTY_STATE: PersistedState = {
@@ -82,6 +92,7 @@ const EMPTY_STATE: PersistedState = {
   answerCursor: 0,
   conditional: {},
   abstractTried: {},
+  affiliationTried: {},
 };
 
 /** 不认识的回执里出现这些词，就算「不感兴趣」。 */
@@ -282,6 +293,8 @@ export class InterestPushWorld implements World {
       const found = await this.collect();
       this.lastError = null;
       this.merge(found);
+      // 机构要补在合并之后：collect 阶段 this.items 还是上一轮的名单。
+      await this.enrichAffiliations(this.fetchDeps());
     } catch (err) {
       this.lastError = String((err as Error)?.message ?? err);
       this.log(`抓取失败：${this.lastError}`);
@@ -309,15 +322,19 @@ export class InterestPushWorld implements World {
     this.writeConfigSnapshot();
   }
 
-  private async collect(): Promise<NewsItem[]> {
-    const cfg = this.opts.cfg;
-    const deps = {
+  private fetchDeps(): { fetchImpl: typeof fetch; mailto: string; openAlexKey: string; semanticScholarKey: string } {
+    return {
       fetchImpl: this.opts.fetchImpl ?? fetch,
-      mailto: cfg.mailto,
+      mailto: this.opts.cfg.mailto,
       // 可选：这两个免费额度按 IP 共享，有 key 才稳。走环境变量，不落盘。
       openAlexKey: process.env.OPENALEX_API_KEY ?? '',
       semanticScholarKey: process.env.S2_API_KEY ?? '',
     };
+  }
+
+  private async collect(): Promise<NewsItem[]> {
+    const cfg = this.opts.cfg;
+    const deps = this.fetchDeps();
     const tierOf = new Map<string, JournalEntry>(cfg.journals.map((j) => [j.issn, j]));
     const jobs: Array<() => Promise<NewsItem[]>> = [
       ...cfg.journals.map((j) => () =>
@@ -369,6 +386,45 @@ export class InterestPushWorld implements World {
       this.log(`补摘要失败：${String((err as Error)?.message ?? err)}`);
     }
     if (filled > 0) this.log(`补了 ${filled} 条摘要`);
+  }
+
+  /**
+   * 补作者机构。期刊条目按 DOI 批量问 OpenAlex，预印本没有 DOI 时按标题问，
+   * 同一条 24 小时内只问一次，结果写回条目。
+   */
+  private async enrichAffiliations(deps: { fetchImpl?: typeof fetch; mailto: string }): Promise<void> {
+    const now = this.now();
+    const missing = this.items.filter((i) => (i.affiliation ?? '').trim() === '');
+    if (missing.length === 0) return;
+    const withDoi = missing.filter((i) => (i.doi ?? '').trim() !== '');
+    if (withDoi.length > 0) {
+      const byDoi = await fetchOpenAlexInstitutions(withDoi.map((i) => i.doi as string), deps);
+      let filled = 0;
+      for (const item of withDoi) {
+        const hit = byDoi[(item.doi as string).toLowerCase()];
+        if (hit !== undefined) {
+          item.affiliation = hit;
+          item.sourceDetail = `${item.sourceDetail} +openalex机构`;
+          filled += 1;
+        }
+      }
+      if (filled > 0) this.log(`补了 ${filled} 条机构`);
+    }
+    this.state.affiliationTried ??= {};
+    const tried = this.state.affiliationTried;
+    const byTitle = missing
+      .filter((i) => (i.affiliation ?? '').trim() === '' && i.title.trim() !== '')
+      .filter((i) => now - (tried[i.id] ?? 0) > 24 * 60 * 60_000)
+      .slice(0, 12);
+    for (const item of byTitle) {
+      tried[item.id] = now;
+      const names = await fetchOpenAlexInstitutionsByTitle(item.title, deps);
+      if (names !== '') {
+        item.affiliation = names;
+        item.sourceDetail = `${item.sourceDetail} +openalex标题机构`;
+      }
+    }
+    this.saveState();
   }
 
   /**
@@ -563,7 +619,7 @@ export class InterestPushWorld implements World {
         : `速评（大肥鱼，${review.total ?? '—'}/10）：${review.text}`,
       `标题：${item.title}`,
       `期刊：${item.journal}${item.tier ? `（${item.tier}）` : ''} · 上线 ${item.issued}`,
-      `作者：${authors || '—'}${item.team ? ` · ${item.team}` : ''}`,
+      `作者：${authors || '—'}${item.affiliation ? ` · ${item.affiliation}` : ''}`,
       `DOI：${item.doi ?? '—'}`,
       `爬取源：${item.sourceDetail}（抓取于 ${this.localTime(item.foundAt)}）`,
       `摘要：${item.abstract || '（源未给摘要）'}`,

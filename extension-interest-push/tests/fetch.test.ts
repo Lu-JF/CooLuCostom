@@ -2,7 +2,7 @@
  * 抓取层单测：Crossref 查询参数、arXiv 搜索式与合并、容错、条件请求 304/200/失败分支。
  */
 import { describe, expect, it } from 'vitest';
-import { fetchArxiv, fetchConditional, fetchHfDaily, fetchJournal, type FetchDeps } from '../src/fetch.ts';
+import { fetchArxiv, fetchConditional, fetchHfDaily, fetchJournal, institutionsOf, type FetchDeps } from '../src/fetch.ts';
 
 /** 造一个类 Response 的返回。 */
 function mockResponse(
@@ -298,5 +298,25 @@ describe('fetchConditional', () => {
       notModified: false,
       text: '',
     });
+  });
+});
+
+describe('机构提取', () => {
+  it('按 authorships 顺序收机构，去重并最多三个', () => {
+    const row = {
+      authorships: [
+        { institutions: [{ display_name: 'Southeast University' }, { display_name: "Xi'an Jiaotong University" }] },
+        { institutions: [{ display_name: 'Southeast University' }] },
+        { institutions: [{ display_name: 'Nanjing University' }] },
+        { institutions: [{ display_name: 'Tsinghua University' }] },
+        { institutions: [{}] },
+      ],
+    };
+    expect(institutionsOf(row)).toEqual(['Southeast University', "Xi'an Jiaotong University", 'Nanjing University']);
+  });
+
+  it('没有 authorships 时返回空数组', () => {
+    expect(institutionsOf(null)).toEqual([]);
+    expect(institutionsOf({ authorships: 'x' })).toEqual([]);
   });
 });

@@ -344,3 +344,81 @@ export async function fetchConditional(
     return { notModified: false, text: '' };
   }
 }
+
+/** 把 OpenAlex 的 `authorships` 收成机构名：去重、去掉纯国家或空值，最多三个。 */
+export function institutionsOf(row: unknown): string[] {
+  const authorships = (row as { authorships?: unknown } | null)?.authorships;
+  if (!Array.isArray(authorships)) return [];
+  const names: string[] = [];
+  for (const entry of authorships) {
+    const insts = (entry as { institutions?: unknown } | null)?.institutions;
+    if (!Array.isArray(insts)) continue;
+    for (const inst of insts) {
+      const name = String((inst as { display_name?: unknown } | null)?.display_name ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (name !== '' && !names.includes(name)) names.push(name);
+    }
+  }
+  return names.slice(0, 3);
+}
+
+/** 按 DOI 批量取机构（OpenAlex，一次最多 50 个）。 */
+export async function fetchOpenAlexInstitutions(dois: string[], deps: FetchDeps): Promise<Record<string, string>> {
+  const doFetch = resolveFetch(deps);
+  const out: Record<string, string> = {};
+  const clean = [...new Set(dois.map((d) => d.trim().toLowerCase()).filter((d) => d !== ''))].slice(0, 200);
+  if (clean.length === 0) return out;
+  for (let i = 0; i < clean.length; i += 25) {
+    const chunk = clean.slice(i, i + 25);
+    try {
+      const filter = encodeURIComponent(`doi:${chunk.join('|')}`);
+      const url = withOpenAlexKey(
+        `https://api.openalex.org/works?filter=${filter}&per-page=50&select=doi,authorships&mailto=${encodeURIComponent(deps.mailto)}`,
+        deps,
+      );
+      const res = await doFetch(url, { headers: { Accept: 'application/json' } });
+      if (!res.ok) continue;
+      const body = (await res.json()) as { results?: unknown[] };
+      for (const row of body?.results ?? []) {
+        const doi = String((row as { doi?: unknown } | null)?.doi ?? '')
+          .replace(/^https?:\/\/doi\.org\//i, '')
+          .toLowerCase();
+        const names = institutionsOf(row);
+        if (doi !== '' && names.length > 0) out[doi] = names.join('、');
+      }
+    } catch {
+      /* 这一批失败就跳过 */
+    }
+  }
+  return out;
+}
+
+/** 按标题在 OpenAlex 取机构（预印本没有 DOI 时用）。 */
+export async function fetchOpenAlexInstitutionsByTitle(title: string, deps: FetchDeps): Promise<string> {
+  const clean = title.replace(/\s+/g, ' ').trim();
+  if (clean.length < 12) return '';
+  const doFetch = resolveFetch(deps);
+  try {
+    const url = withOpenAlexKey(
+      'https://api.openalex.org/works?search=' +
+        encodeURIComponent(clean) +
+        `&per-page=3&select=title,authorships&mailto=${encodeURIComponent(deps.mailto)}`,
+      deps,
+    );
+    const res = await doFetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return '';
+    const body = (await res.json()) as { results?: unknown[] };
+    const norm = (v: unknown): string => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const want = norm(clean);
+    for (const row of body?.results ?? []) {
+      const got = norm((row as { title?: unknown } | null)?.title);
+      if (got === '' || !(got === want || got.includes(want) || want.includes(got))) continue;
+      const names = institutionsOf(row);
+      if (names.length > 0) return names.join('、');
+    }
+  } catch {
+    /* 查不到就算了 */
+  }
+  return '';
+}

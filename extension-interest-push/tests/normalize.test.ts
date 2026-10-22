@@ -56,10 +56,10 @@ describe('normalizeCrossref', () => {
     expect(item.journal).toBe('Mechanical Systems and Signal Processing');
   });
 
-  it('作者按 given family 拼接并去重，team 取第一个非空 affiliation', () => {
+  it('作者按 given family 拼接并去重，机构取第一个非空 affiliation', () => {
     const item = normalizeCrossref(CROSSREF_ITEM, CTX);
     expect(item.authors).toEqual(['Zhipeng Feng', 'Zian Li']);
-    expect(item.team).toBe("Xi'an Jiaotong University");
+    expect(item.affiliation).toBe("Xi'an Jiaotong University");
   });
 
   it('date-parts 缺月日时补 01', () => {

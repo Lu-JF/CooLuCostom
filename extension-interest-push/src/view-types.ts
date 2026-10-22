@@ -8,7 +8,8 @@ export interface NewsItem {
   doi: string | null;
   title: string;
   authors: string[];
-  team: string | null;
+  /** 作者机构（OpenAlex 的 authorships，最多三个）。 */
+  affiliation: string | null;
   journal: string;
   journalIssn: string | null;
   tier: string | null;

@@ -11,7 +11,7 @@ const ITEM: NewsItem = {
   doi: '10.1109/TIE.2026.1',
   title: 'A lightweight network for bearing fault diagnosis',
   authors: ['Jane Doe'],
-  team: null,
+  affiliation: null,
   journal: 'IEEE Transactions on Industrial Electronics',
   journalIssn: '0278-0046',
   tier: '中科院一区 · JCR Q1',

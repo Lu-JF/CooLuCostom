@@ -203,7 +203,7 @@ verify-instance → 12 项全部通过
 
 ```bash
 cd extension-interest-push
-npx vitest run           # 12 个文件 152 项通过（含「换一篇」「无摘要只翻标题」「陈旧 HF 条目会被清掉」
+npx vitest run           # 12 个文件 155 项通过（含「换一篇」「无摘要只翻标题」「陈旧 HF 条目会被清掉」
                          #   「补到的摘要写回已有条目」「只推有摘要的条目」「按标题补摘要的标题匹配」
                          #   「兴趣记录增删落盘」「可选配额密钥」等用例）
 npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.web.json --noEmit   # 0 错

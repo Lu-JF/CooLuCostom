@@ -415,7 +415,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
         { k: t.detail.journal, v: `${item.journal}${item.tier ? `（${item.tier}）` : ''}` },
         { k: t.detail.issued, v: item.issued },
         { k: t.detail.authors, v: item.authors.length > 0 ? item.authors.join('、') : t.detail.none },
-        { k: t.detail.team, v: item.team ?? t.detail.none },
+        { k: t.detail.affiliation, v: item.affiliation ?? t.detail.none },
         { k: t.detail.doi, v: item.doi ?? t.detail.none },
         { k: t.detail.source, v: item.sourceDetail },
       ]),

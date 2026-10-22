@@ -124,7 +124,7 @@ try {
     selects: document.querySelectorAll('select').length,
     order: [...document.querySelectorAll('.sheet h3')].map((h) => (h.childNodes[0]?.textContent ?? '').trim()),
   }));
-  check('详情给出期刊/上线/作者/团队/DOI/爬取源', ['期刊', '上线', '作者', '团队', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 4)).join(','));
+  check('详情给出期刊/上线/作者/机构/DOI/爬取源', ['期刊', '上线', '作者', '机构', 'DOI', '爬取源'].every((k) => detail.kv.some((row) => row.startsWith(k))), detail.kv.map((r) => r.slice(0, 4)).join(','));
   check('从上到下是大肥鱼速评、论文速览、中文译文、详情卡', JSON.stringify(detail.order.slice(0, 4)) === JSON.stringify(['大肥鱼速评', '论文速览', '中文译文', '详情']), detail.order.slice(0, 4).join(' → '));
   check('速览里标题与摘要都有内容', detail.title.length > 10 && detail.abstract.length >= 10, `${detail.title.slice(0, 34)} … / ${detail.abstract.slice(0, 34)}`);
   check('详情卡键列不再占固定宽度', detail.kvTableWidth === 0 || detail.kvFirstColWidth / detail.kvTableWidth < 0.3, `键列 ${Math.round(detail.kvFirstColWidth)}px / 表宽 ${Math.round(detail.kvTableWidth)}px`);

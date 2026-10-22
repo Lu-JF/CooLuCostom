@@ -8,7 +8,7 @@ import { isPushable, pickManualCandidate, pickPushCandidate } from '../src/pick.
 import type { NewsItem } from '../src/view-types.ts';
 
 const base = {
-  doi: null, title: 'T', authors: [], team: null, journal: 'Measurement', journalIssn: null, tier: null,
+  doi: null, title: 'T', authors: [], affiliation: null, journal: 'Measurement', journalIssn: null, tier: null,
   issued: '2026-10-01', url: 'https://example.org', pdfUrl: null, source: 'crossref' as const,
   sourceDetail: 'crossref', foundAt: 1, abstract: 'Abstract.',
 };

@@ -55,7 +55,7 @@ export interface InterestText {
     refresh: string;
     next: string;
     authors: string;
-    team: string;
+    affiliation: string;
     journal: string;
     issued: string;
     doi: string;
@@ -210,7 +210,7 @@ const zh: InterestText = {
     refresh: '刷新',
     next: '换一篇',
     authors: '作者',
-    team: '团队',
+    affiliation: '机构',
     journal: '期刊',
     issued: '上线',
     doi: 'DOI',
@@ -365,7 +365,7 @@ const en: InterestText = {
     refresh: 'Refresh',
     next: 'Next paper',
     authors: 'Authors',
-    team: 'Team',
+    affiliation: 'Institution',
     journal: 'Venue',
     issued: 'Published',
     doi: 'DOI',
