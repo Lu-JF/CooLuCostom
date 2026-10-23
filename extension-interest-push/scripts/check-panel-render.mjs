@@ -302,6 +302,7 @@ try {
       termRows: termRows.length,
       termCols: termRows[0]?.querySelectorAll('span').length ?? 0,
       termInputs: document.querySelectorAll('.ip-grid .ip-jrow input').length,
+      switchCount: document.querySelectorAll('.ip-switch').length,
       tags: [...document.querySelectorAll('.ip-tag .ip-tagtext')].map((el) => el.textContent ?? ''),
       weekCount: weekButtons.length,
       weekOn: weekButtons.filter((b) => b.classList.contains('on')).length,
@@ -320,13 +321,14 @@ try {
     };
   });
   check('四组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
-  check('节奏字段齐（间隔/上限/轮次/时刻/静默/星期/暂停到）', ['检查间隔', '每天最多几条', '对话轮次上限', '推送时刻', '静默时段', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
+  check('节奏字段齐（检查间隔/两种模式/最小间隔/上限/时刻/星期/暂停到）', ['检查间隔', '随机推送', '定时推送', '最小间隔', '每天最多几条', '推送时刻', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
+  check('两种推送模式各有一个开关', cfg.text.includes('开') && cfg.text.includes('关') && cfg.switchCount >= 2, `${cfg.switchCount} 个开关`);
   check(
     '推送时刻与关键词是标签',
     cfg.tags.length >= 5 && cfg.tags.some((x) => /^\d{2}:\d{2}$/.test(x)) && cfg.tags.some((x) => x.includes('bearing')),
     cfg.tags.slice(0, 6).join(' / '),
   );
-  check('时刻是「时 + 分」两个下拉，分钟能选到 15（不用打字）', cfg.timeHasQuarter && cfg.timeSelects >= 4, `${cfg.timeSelects} 个下拉，含 15 分：${cfg.timeHasQuarter}`);
+  check('时刻是「时 + 分」两个下拉，分钟能选到 15（不用打字）', cfg.timeHasQuarter && cfg.timeSelects >= 2, `${cfg.timeSelects} 个下拉，含 15 分：${cfg.timeHasQuarter}`);
   check('星期是 1-7 的按钮、默认全亮、单独一行', cfg.weekCount === 7 && cfg.weekOn === 7 && cfg.weekInOwnRow, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个，独占一行：${cfg.weekInOwnRow}`);
   check('期刊表只有刊名 / ISSN / 分区三列', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区/.test(cfg.journalHead) && !/分组/.test(cfg.journalHead), cfg.journalHead.trim().slice(0, 40));
   check('期刊只读：没有输入框，行数就是配置里的家数', cfg.journalRows >= 20 && cfg.journalInputs === 0, `${cfg.journalRows} 行 / 输入框 ${cfg.journalInputs} 个`);

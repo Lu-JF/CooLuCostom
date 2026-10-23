@@ -16,20 +16,23 @@ export interface JournalEntry {
   tierBasis: string;
 }
 
+/** 推送节奏。 */
+export type PushMode = 'fixed' | 'random';
+
 export interface InterestPushConfigSection {
   enabled: boolean;
   /** 检查间隔（分钟）。一次检查会逐个问期刊的 Crossref 接口，间隔不宜太短。 */
   checkMinutes: number;
-  /** 允许打扰的时刻（本地时间 `HH:MM`）。每个时刻最多打扰一次。 */
+  /** 推送节奏：`fixed` 按推送时刻，`random` 按最小间隔随机。 */
+  pushMode: PushMode;
+  /** 定时模式：允许打扰的时刻（本地时间 `HH:MM`）。每个时刻最多一次。 */
   pushTimes: string[];
-  /** 每天最多推送几条。 */
+  /** 随机模式：两次推送之间的最小间隔（分钟）。 */
+  minIntervalMinutes: number;
+  /** 随机模式：每天最多推送几条。 */
   dailyCap: number;
-  /** 静默时段 `[起, 止]`（`HH:MM`）：期间只检查不打扰。 */
-  quiet: string[];
   /** 允许打扰的星期（ISO 编号，1 = 周一）。 */
   pushDays: number[];
-  /** 气泡对话轮次上限。 */
-  maxRounds: number;
   /** 暂停到某个时刻（epoch ms，0 表示不暂停）。 */
   pausedUntil: number;
   /** 研究领域关键词，用于 Crossref 与 arXiv 查询。 */
@@ -66,11 +69,11 @@ export interface InterestPushConfigSection {
 export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
   enabled: false,
   checkMinutes: 120,
+  pushMode: 'fixed',
   pushTimes: ['10:30', '13:00', '19:30'],
+  minIntervalMinutes: 120,
   dailyCap: 2,
-  quiet: ['22:30', '08:30'],
   pushDays: [1, 2, 3, 4, 5, 6, 7],
-  maxRounds: 3,
   pausedUntil: 0,
   keywords: [
     'bearing fault diagnosis',

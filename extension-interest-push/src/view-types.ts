@@ -86,11 +86,11 @@ export interface InterestPushView {
   revision: number;
   config: {
     checkMinutes: number;
+    pushMode: 'fixed' | 'random';
     pushTimes: string[];
+    minIntervalMinutes: number;
     dailyCap: number;
-    quiet: string[];
     pushDays: number[];
-    maxRounds: number;
     pausedUntil: number;
     keywords: string[];
     journals: Array<{ label: string; issn: string; tier: string; tierBasis: string }>;
@@ -105,8 +105,6 @@ export interface InterestPushView {
     allowNoAbstractPush: boolean;
     /** 是否已经配了 OpenAlex 密钥（值不回显）。 */
     openAlexKeySet: boolean;
-    /** 落在静默时段里的推送时刻（配置页据此提示）。 */
-    quietConflicts: string[];
   };
   /** 上一次「检测全部期刊」的结果。 */
   journalTest: {
@@ -122,6 +120,8 @@ export interface InterestPushView {
     pushedToday: number;
     paused: boolean;
     nextCheckAt: number | null;
+    /** 下一次唤醒的时刻：定时模式是窗口，随机模式是掷出的时间点。 */
+    nextPushAt: number | null;
   };
   items: NewsRow[];
   /** 收进兴趣记录的条目，按收藏时间倒序。 */

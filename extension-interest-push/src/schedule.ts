@@ -1,19 +1,25 @@
 /**
- * 调度决策：给定配置、当前时刻与今日状态，回答「要不要检查 / 要不要打扰」。
- * 纯函数，不含定时器——检查频率由调用方的定时器控制，这里只做时刻判断。
+ * 推送节奏的判定（纯函数）。
+ *
+ * 两种模式：
+ * - `fixed`：按配置的推送时刻，每个时刻最多一次。
+ * - `random`：两次推送至少隔 `minIntervalMinutes`，超过之后越久越可能推；每天有上限。
+ *
+ * 这里只算「到点没有」「该不该推」，定时器由 World 负责。
  */
 
+export type PushMode = 'fixed' | 'random';
+
 export interface ScheduleConfig {
-  checkMinutes: number;
-  /** 允许打扰的时刻，`HH:MM`。每个时刻最多打扰一次。 */
+  mode: PushMode;
+  /** 定时模式的时刻，`HH:MM`。 */
   pushTimes: string[];
-  /** 每天最多推送条数。 */
+  /** 随机模式的最小间隔（分钟）。 */
+  minIntervalMinutes: number;
+  /** 随机模式的每日上限。 */
   dailyCap: number;
-  /** 静默时段 `[起, 止]`，`HH:MM`，可能跨午夜：期间只检查不打扰。 */
-  quiet: string[];
   /** 允许打扰的星期（ISO：1 = 周一 … 7 = 周日）。 */
   pushDays: number[];
-  maxRounds: number;
   /** 暂停到某个时刻（epoch ms，0 表示不暂停）。 */
   pausedUntil: number;
 }
@@ -21,19 +27,22 @@ export interface ScheduleConfig {
 export interface ScheduleState {
   pushedToday: number;
   lastWindowKey: string | null;
+  lastPushAt: number | null;
 }
 
-export interface ScheduleDecision {
-  check: boolean;
-  push: boolean;
-  windowKey: string | null;
-  reason: string;
-}
+export type ScheduleReason =
+  | 'ok'
+  | 'paused'
+  | 'outside-window'
+  | 'window-used'
+  | 'day-off'
+  | 'daily-cap'
+  | 'too-soon';
 
 /** 命中窗口的宽度（分钟）。 */
 const WINDOW_MINUTES = 5;
 
-interface Clock {
+export interface Clock {
   h: number;
   m: number;
   label: string;
@@ -41,7 +50,7 @@ interface Clock {
 }
 
 /** 解析 `HH:MM`；非法一律返回 null（调用方据此忽略该值）。 */
-function parseClock(text: string): Clock | null {
+export function parseClock(text: string): Clock | null {
   if (typeof text !== 'string') return null;
   const matched = /^(\d{1,2}):(\d{2})$/.exec(text.trim());
   if (!matched) return null;
@@ -52,7 +61,7 @@ function parseClock(text: string): Clock | null {
 }
 
 /** 本地日期 `YYYY-MM-DD`。 */
-function localDate(now: Date): string {
+export function localDate(now: Date): string {
   const y = now.getFullYear();
   const mo = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
@@ -60,13 +69,14 @@ function localDate(now: Date): string {
 }
 
 /** ISO 星期：1 = 周一 … 7 = 周日。 */
-function isoDay(now: Date): number {
+export function isoDay(now: Date): number {
   const d = now.getDay();
   return d === 0 ? 7 : d;
 }
 
-/** now 的本地时间落在 [HH:MM, HH:MM + 5 分钟) 内则返回该时刻标签，否则 null。 */
-function hitWindow(pushTimes: string[], minutes: number): string | null {
+/** now 落在某个时刻的 [HH:MM, HH:MM + 5 分钟) 内则返回该时刻标签，否则 null。 */
+export function hitWindow(pushTimes: string[], now: Date): string | null {
+  const minutes = now.getHours() * 60 + now.getMinutes();
   for (const raw of pushTimes) {
     const clock = parseClock(raw);
     if (!clock) continue;
@@ -75,42 +85,66 @@ function hitWindow(pushTimes: string[], minutes: number): string | null {
   return null;
 }
 
-/** 是否处于静默时段（支持跨午夜）。非法或不成对的静默值忽略。 */
-function inQuiet(quiet: string[], minutes: number): boolean {
-  const start = parseClock(quiet?.[0] ?? '');
-  const end = parseClock(quiet?.[1] ?? '');
-  if (!start || !end) return false;
-  if (start.minutes <= end.minutes) return minutes >= start.minutes && minutes < end.minutes;
-  return minutes >= start.minutes || minutes < end.minutes;
+/** 定时模式：暂停 → 命中窗口 → 窗口用过 → 非推送日 → 放行。 */
+export function decideFixed(
+  cfg: ScheduleConfig,
+  now: Date,
+  state: ScheduleState,
+): { push: boolean; windowKey: string | null; reason: ScheduleReason } {
+  if (cfg.pausedUntil > now.getTime()) return { push: false, windowKey: null, reason: 'paused' };
+  const hit = hitWindow(cfg.pushTimes, now);
+  if (hit === null) return { push: false, windowKey: null, reason: 'outside-window' };
+  const windowKey = `${localDate(now)}T${hit}`;
+  if (windowKey === state.lastWindowKey) return { push: false, windowKey, reason: 'window-used' };
+  if (!cfg.pushDays.includes(isoDay(now))) return { push: false, windowKey, reason: 'day-off' };
+  return { push: true, windowKey, reason: 'ok' };
 }
 
 /**
- * 决策顺序：暂停 → 是否命中窗口 → 窗口是否用过 → 静默 → 非推送日 → 每日上限 → 放行。
- * `check` 仅在暂停时为 false，其余一律 true。
+ * 随机模式到点没到点：至少隔 `minIntervalMinutes`，之后每个检查点按剩余时间加权，
+ * 越久越可能推；受星期、每日上限与暂停约束。
  */
-export function decide(cfg: ScheduleConfig, now: Date, state: ScheduleState): ScheduleDecision {
-  if (cfg.pausedUntil > now.getTime()) {
-    return { check: false, push: false, windowKey: null, reason: 'paused' };
-  }
+export function decideRandom(
+  cfg: ScheduleConfig,
+  now: Date,
+  state: ScheduleState,
+  nextAt: number,
+  rng: () => number = Math.random,
+): { push: boolean; reason: ScheduleReason } {
+  if (cfg.pausedUntil > now.getTime()) return { push: false, reason: 'paused' };
+  if (!cfg.pushDays.includes(isoDay(now))) return { push: false, reason: 'day-off' };
+  if (state.pushedToday >= cfg.dailyCap) return { push: false, reason: 'daily-cap' };
+  if (now.getTime() < nextAt) return { push: false, reason: 'too-soon' };
+  // 到点之后再掷一次骰子：时间越长，命中概率越高，避免每次刚过最小间隔就必推。
+  const overdue = now.getTime() - nextAt;
+  const minMs = Math.max(1, cfg.minIntervalMinutes) * 60_000;
+  const chance = Math.min(0.95, 0.35 + (overdue / minMs) * 0.6);
+  return rng() <= chance ? { push: true, reason: 'ok' } : { push: false, reason: 'too-soon' };
+}
 
+/**
+ * 下一次随机推送不早于什么时候：最小间隔 + 指数分布的额外等待，平均再等一个最小间隔。
+ * 这样「超过最小间隔越久越可能推」在两处都成立。
+ */
+export function randomNextAt(lastPushAt: number | null, minIntervalMinutes: number, now: number, rng: () => number = Math.random): number {
+  const minMs = Math.max(1, minIntervalMinutes) * 60_000;
+  const base = lastPushAt ?? now;
+  const u = Math.min(0.999, Math.max(0.001, rng()));
+  return Math.round(base + minMs + -Math.log(1 - u) * minMs);
+}
+
+/** 定时模式下「下一个窗口」的时刻；没有可用的时刻返回 null。 */
+export function nextWindowAt(pushTimes: string[], now: Date): number | null {
   const minutes = now.getHours() * 60 + now.getMinutes();
-  const hit = hitWindow(cfg.pushTimes ?? [], minutes);
-  if (hit === null) {
-    return { check: true, push: false, windowKey: null, reason: 'outside-window' };
+  const seconds = now.getSeconds();
+  let best: number | null = null;
+  for (const raw of pushTimes) {
+    const clock = parseClock(raw);
+    if (!clock) continue;
+    let delta = clock.minutes - minutes;
+    if (delta < 0) delta += 24 * 60;
+    const at = new Date(now.getTime() + delta * 60_000 - seconds * 1000);
+    if (best === null || at.getTime() < best) best = at.getTime();
   }
-
-  const windowKey = `${localDate(now)}T${hit}`;
-  if (windowKey === state.lastWindowKey) {
-    return { check: true, push: false, windowKey, reason: 'window-used' };
-  }
-  if (inQuiet(cfg.quiet ?? [], minutes)) {
-    return { check: true, push: false, windowKey, reason: 'quiet' };
-  }
-  if (!(cfg.pushDays ?? []).includes(isoDay(now))) {
-    return { check: true, push: false, windowKey, reason: 'day-off' };
-  }
-  if (state.pushedToday >= cfg.dailyCap) {
-    return { check: true, push: false, windowKey, reason: 'daily-cap' };
-  }
-  return { check: true, push: true, windowKey, reason: 'ok' };
+  return best;
 }

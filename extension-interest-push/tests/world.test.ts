@@ -85,7 +85,8 @@ function makeWorld(options?: {
     journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: '中科院一区 · JCR Q1', tierBasis: '2025 中科院分区表 · JCR 2024' }],
     glossary: ['bearing | 轴承', 'fault diagnosis | 故障诊断'],
     pushTimes: ['10:30'],
-    quiet: ['22:30', '08:30'],
+    pushMode: 'fixed',
+    minIntervalMinutes: 120,
   };
   const patches: Array<Partial<InterestPushConfigSection>> = [];
   const secrets = new Map<string, string>();
@@ -407,7 +408,8 @@ describe('配置保存', () => {
         dailyCap: 99,
         quiet: 'abc',
         pushDays: ['9'],
-        maxRounds: 9,
+        minIntervalMinutes: 99999,
+        pushMode: 'random',
         keywords: 'bearing\n\ngearbox ',
 
         arxivCats: 'eess.SP, ',
@@ -422,7 +424,8 @@ describe('配置保存', () => {
     expect(cfg.checkMinutes).toBe(5);
     expect(cfg.pushTimes).toEqual(['09:05']);
     expect(cfg.dailyCap).toBe(10);
-    expect(cfg.maxRounds).toBe(5);
+    expect(cfg.minIntervalMinutes).toBe(1440);
+    expect(cfg.pushMode).toBe('random');
     expect(cfg.pushDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(cfg.keywords).toEqual(['bearing', 'gearbox']);
     // 期刊与术语表只由 add/remove 方法改，保存配置不再覆盖它们。
@@ -503,15 +506,15 @@ describe('陈旧条目的清理', () => {
 });
 
 describe('部分字段保存不清空名单', () => {
-  it('只提交 quiet 时，期刊、关键词、术语表都保持原样', async () => {
+  it('只提交推送时刻时，期刊、关键词、术语表都保持原样', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     const before = world.view('zh').config;
     expect(before.journals.length).toBeGreaterThan(0);
     expect(before.glossary.length).toBeGreaterThan(0);
-    await world.invoke('settings', 'saveSettings', [{ quiet: ['21:00', '07:00'] }], 'zh');
+    await world.invoke('settings', 'saveSettings', [{ pushTimes: ['21:00', '07:00'] }], 'zh');
     const after = world.view('zh').config;
-    expect(after.quiet).toEqual(['21:00', '07:00']);
+    expect(after.pushTimes).toEqual(['07:00', '21:00']);
     expect(after.journals.length).toBe(before.journals.length);
     expect(after.keywords).toEqual(before.keywords);
     expect(after.glossary).toEqual(before.glossary);
@@ -522,18 +525,6 @@ describe('部分字段保存不清空名单', () => {
     await world.start(host.asHost());
     await world.invoke('settings', 'saveSettings', [{ keywords: [] }], 'zh');
     expect(world.view('zh').config.keywords).toEqual([]);
-  });
-});
-
-describe('静默时段保序', () => {
-  it('跨夜时段 22:30 → 08:30 保存后不会被排成 08:30 → 22:30', async () => {
-    const { world, host } = makeWorld();
-    await world.start(host.asHost());
-    await world.invoke('settings', 'saveSettings', [{ quiet: ['22:30', '08:30'] }], 'zh');
-    expect(world.view('zh').config.quiet).toEqual(['22:30', '08:30']);
-    // 反过来写也照原样保留（使用者可能就想设白天静默）
-    await world.invoke('settings', 'saveSettings', [{ quiet: ['09:00', '17:00'] }], 'zh');
-    expect(world.view('zh').config.quiet).toEqual(['09:00', '17:00']);
   });
 });
 
@@ -606,23 +597,23 @@ describe('大肥鱼速评', () => {
 });
 
 describe('配置生效与缓存收敛', () => {
-  it('改轮数上限后，提示词里的轮数变量跟着变', async () => {
+  it('气泡轮数固定 4 轮，提示词变量不受配置影响', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
-    expect(world.envPromptVars()['interestpush.rounds']).toBe('3');
-    await world.invoke('settings', 'saveSettings', [{ maxRounds: 4 }], 'zh');
+    expect(world.envPromptVars()['interestpush.rounds']).toBe('4');
+    await world.invoke('settings', 'saveSettings', [{ pushMode: 'random' }], 'zh');
     expect(world.envPromptVars()['interestpush.rounds']).toBe('4');
   });
 
   it('新增推送时刻后，下一个窗口立刻按新配置计算', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
-    await world.invoke('settings', 'saveSettings', [{ pushTimes: ['10:30', '15:35', '19:30'] }], 'zh');
+    await world.invoke('settings', 'saveSettings', [{ pushTimes: ['10:31', '15:35'] }], 'zh');
     const next = world.nextWindowAt();
     expect(next).not.toBeNull();
-    // FIXED 是 2026-10-19 13:00（本地），下一个窗口应为 15:35
+    // FIXED 是本地 10:30，最近的窗口是 10:31
     const at = new Date(next!);
-    expect([at.getHours(), at.getMinutes()]).toEqual([15, 35]);
+    expect([at.getHours(), at.getMinutes()]).toEqual([10, 31]);
   });
 
   it('保存「允许推缺摘要」这类开关也会落到配置里', async () => {
@@ -632,14 +623,6 @@ describe('配置生效与缓存收敛', () => {
     await world.invoke('settings', 'saveSettings', [{ allowNoAbstractPush: true, requireAbstract: true }], 'zh');
     expect(cfg.allowNoAbstractPush).toBe(true);
     expect(world.view('zh').config.allowNoAbstractPush).toBe(true);
-  });
-
-  it('推送时刻落在静默时段时，视图会给出冲突清单', async () => {
-    const { world, host } = makeWorld();
-    await world.start(host.asHost());
-    expect(world.view('zh').config.quietConflicts).toEqual([]);
-    await world.invoke('settings', 'saveSettings', [{ quiet: ['10:00', '16:00'] }], 'zh');
-    expect(world.view('zh').config.quietConflicts).toEqual(['10:30']);
   });
 
   it('配置被重置（期刊清空）时，启动会从快照恢复', async () => {

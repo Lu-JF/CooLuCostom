@@ -700,27 +700,56 @@ function mountSettings(ctx: ConsolePanelContext): void {
   });
   top.append(checkBtn, pushBtn, checkStatus.el, pushStatus.el, note);
 
-  // ---- 推送节奏
+  // ---- 推送节奏：两种模式并排，切换开关在各自左上角
   const cadence = ui.sheet({ title: t.settings.groupPush });
   const checkInput = numberInput(ui, '120');
   const capInput = numberInput(ui, '2');
-  const roundsInput = numberInput(ui, '3');
-  const numbersRow = ui.h('div', 'ip-fields');
-  numbersRow.append(
-    fieldRow(ui, t.settings.checkMinutes, checkInput),
-    fieldRow(ui, t.settings.dailyCap, capInput),
-    fieldRow(ui, t.settings.maxRounds, roundsInput),
-  );
+  const minGapInput = numberInput(ui, '120');
+
   const pushTimesEditor = tagEditor(ui, t, {
     add: () => {
       const f = timeField(ui, '10:30');
       return { el: f.el, value: () => f.value() };
     },
   });
-  const quietRow = ui.h('div', 'ip-fields');
-  const quietStart = timeField(ui, '22:30');
-  const quietEnd = timeField(ui, '08:30');
-  quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart.el), fieldRow(ui, t.settings.quietEnd, quietEnd.el));
+
+  const randomCard = ui.h('div', 'ip-mode');
+  const fixedCard = ui.h('div', 'ip-mode');
+  const randomSwitch = ui.button('', { size: 'sm', onClick: () => setMode('random') });
+  const fixedSwitch = ui.button('', { size: 'sm', onClick: () => setMode('fixed') });
+  randomSwitch.classList.add('ip-switch');
+  fixedSwitch.classList.add('ip-switch');
+
+  const randomHead = ui.h('div', 'ip-modehead');
+  randomHead.append(randomSwitch, ui.h('span', 'ip-modetitle', t.settings.modeRandom));
+  const fixedHead = ui.h('div', 'ip-modehead');
+  fixedHead.append(fixedSwitch, ui.h('span', 'ip-modetitle', t.settings.modeFixed));
+
+  const randomBody = ui.h('div', 'ip-modebody');
+  randomBody.append(
+    fieldRow(ui, t.settings.minInterval, minGapInput),
+    fieldRow(ui, t.settings.dailyCap, capInput),
+    ui.msgline(t.settings.randomHint),
+  );
+  const fixedBody = ui.h('div', 'ip-modebody');
+  fixedBody.append(fieldRow(ui, t.settings.pushTimes, ui.h('div')), pushTimesEditor.el, ui.msgline(t.settings.fixedHint));
+
+  randomCard.append(randomHead, randomBody);
+  fixedCard.append(fixedHead, fixedBody);
+  const modeRow = ui.h('div', 'ip-modes');
+  modeRow.append(randomCard, fixedCard);
+
+  const checkRow = ui.h('div', 'ip-fields');
+  checkRow.append(fieldRow(ui, t.settings.checkMinutes, checkInput));
+
+  const week = weekdayButtons(ui);
+  const weekRow = ui.h('div', 'ip-row-block');
+  weekRow.append(ui.h('span', 'ip-fieldlabel', t.settings.pushDays), week.el);
+  const pauseRow = ui.h('div', 'ip-fields');
+  const pauseDate = ui.input({ type: 'date' });
+  const resumeBtn = ui.button(t.settings.resumNow, { size: 'sm', onClick: () => { pauseDate.value = ''; } });
+  pauseRow.append(fieldRow(ui, t.settings.pausedUntil, pauseDate), resumeBtn);
+
   const abstractBox = ui.checkbox(t.settings.requireAbstract, { checked: true });
   const bareBox = ui.checkbox(t.settings.allowNoAbstract, { checked: false });
   // OpenAlex 密钥：只写部署 .env，页面上不回显，只显示「已配置 / 未配置」。
@@ -739,7 +768,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
           view = out.view;
           if (out.ok) {
             keyInput.value = '';
-            ui.toast(value === '' ? t.settings.openAlexSave : t.settings.openAlexSave, 'ok');
+            ui.toast(t.settings.openAlexSave, 'ok');
           } else {
             ui.toast(String(out.reason ?? ''), 'bad');
           }
@@ -755,28 +784,23 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const keyRow = ui.h('div', 'ip-fieldrow ip-keyrow');
   keyRow.append(ui.h('span', 'ip-fieldlabel', t.settings.openAlexKey), keyInput, keySaveBtn);
 
-  const week = weekdayButtons(ui);
-  // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
-  const weekRow = ui.h('div', 'ip-row-block');
-  weekRow.append(ui.h('span', 'ip-fieldlabel', t.settings.pushDays), week.el);
-  const pauseRow = ui.h('div', 'ip-fields');
-  const pauseDate = ui.input({ type: 'date' });
-  const resumeBtn = ui.button(t.settings.resumNow, { size: 'sm', onClick: () => { pauseDate.value = ''; } });
-  pauseRow.append(fieldRow(ui, t.settings.pausedUntil, pauseDate), resumeBtn);
-  const quietWarn = ui.h('div', 'ip-warn');
+  let mode: 'fixed' | 'random' = 'fixed';
+  function setMode(next: 'fixed' | 'random'): void {
+    mode = next;
+    randomCard.classList.toggle('ip-mode-on', next === 'random');
+    fixedCard.classList.toggle('ip-mode-on', next === 'fixed');
+    randomSwitch.classList.toggle('on', next === 'random');
+    fixedSwitch.classList.toggle('on', next === 'fixed');
+    randomSwitch.textContent = next === 'random' ? t.settings.modeOn : t.settings.modeOff;
+    fixedSwitch.textContent = next === 'fixed' ? t.settings.modeOn : t.settings.modeOff;
+  }
+
   const cadenceSave = ui.button(t.settings.saveSectionOf(t.settings.groupPush), { variant: 'primary', size: 'sm', onClick: () => void saveCard('cadence') });
   const cadenceFoot = ui.rowbar();
   cadenceFoot.append(cadenceSave);
   cadence.body.append(
-    block(ui, t.settings.blockFrequency, numbersRow),
-    block(
-      ui,
-      t.settings.blockWindows,
-      fieldRow(ui, t.settings.pushTimes, ui.h('div')),
-      pushTimesEditor.el,
-      fieldRow(ui, t.settings.quiet, quietRow),
-      quietWarn,
-    ),
+    modeRow,
+    block(ui, t.settings.blockFrequency, checkRow, ui.msgline(t.settings.checkMinutesHint)),
     block(ui, t.settings.blockDays, weekRow, pauseRow),
     cadenceFoot,
   );
@@ -975,10 +999,10 @@ function mountSettings(ctx: ConsolePanelContext): void {
   };
   const form = () => ({
     checkMinutes: Number(checkInput.value),
-    dailyCap: Number(capInput.value),
-    maxRounds: Number(roundsInput.value),
+    pushMode: mode,
     pushTimes: uniqSorted(pushTimesEditor.values()),
-    quiet: [quietStart.value(), quietEnd.value()],
+    minIntervalMinutes: Number(minGapInput.value),
+    dailyCap: Number(capInput.value),
     pushDays: week.values(),
     pausedUntil: pausedUntilFromForm(),
     keywords: uniqSorted(keywordsEditor.values()),
@@ -994,7 +1018,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
   const snapshotOf = (cfg: Cfg, card: 'cadence' | 'sources'): unknown => {
     if (card === 'cadence') {
-      return { checkMinutes: cfg.checkMinutes, dailyCap: cfg.dailyCap, maxRounds: cfg.maxRounds, pushTimes: cfg.pushTimes, quiet: cfg.quiet, pushDays: cfg.pushDays, pausedUntil: cfg.pausedUntil };
+      return { checkMinutes: cfg.checkMinutes, pushMode: cfg.pushMode, pushTimes: cfg.pushTimes, minIntervalMinutes: cfg.minIntervalMinutes, dailyCap: cfg.dailyCap, pushDays: cfg.pushDays, pausedUntil: cfg.pausedUntil };
     }
     if (card === 'sources') {
       return { keywords: cfg.keywords, arxivCats: cfg.arxivCats, windowDays: cfg.windowDays, rowsPerJournal: cfg.rowsPerJournal, mailto: cfg.mailto, downloadDir: cfg.downloadDir };
@@ -1042,7 +1066,8 @@ function mountSettings(ctx: ConsolePanelContext): void {
     };
     setNum(checkInput, c.checkMinutes);
     setNum(capInput, c.dailyCap);
-    setNum(roundsInput, c.maxRounds);
+    setNum(minGapInput, c.minIntervalMinutes);
+    setMode(c.pushMode);
     setNum(windowInput, c.windowDays);
     setNum(rowsInput, c.rowsPerJournal);
     setNum(delayInput, c.journalDelayDays);
@@ -1050,16 +1075,11 @@ function mountSettings(ctx: ConsolePanelContext): void {
     bareBox.setChecked(c.allowNoAbstractPush);
     keyState.textContent = c.openAlexKeySet ? t.settings.openAlexSet : t.settings.openAlexUnset;
     keyState.className = `ip-note${c.openAlexKeySet ? ' ip-note-ok' : ''}`;
-    const conflicts = c.quietConflicts ?? [];
-    quietWarn.textContent = conflicts.length > 0 ? t.settings.quietConflict(conflicts.join('、')) : '';
-    quietWarn.hidden = conflicts.length === 0;
     if (document.activeElement !== mailtoInput) mailtoInput.value = c.mailto;
     if (document.activeElement !== dirInput) dirInput.value = c.downloadDir;
     pushTimesEditor.setValues(c.pushTimes);
     keywordsEditor.setValues(c.keywords);
     fillCats(c.arxivCats);
-    quietStart.set(c.quiet[0] ?? '22:30');
-    quietEnd.set(c.quiet[1] ?? '08:30');
     week.setValues(c.pushDays);
     if (c.pausedUntil > 0) {
       if (document.activeElement !== pauseDate) pauseDate.value = localDateValue(c.pausedUntil);

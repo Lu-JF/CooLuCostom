@@ -818,3 +818,85 @@
   margin: 0 0 10px;
   line-height: 1.7;
 }
+
+/* 两种推送节奏并排：各自左上角一个开关，选中的那张亮、另一张灰 */
+.ip-shell .ip-modes {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+
+.ip-shell .ip-mode {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.ip-shell .ip-mode-on {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+/* 两栏之间那条竖线 */
+.ip-shell .ip-mode + .ip-mode {
+  position: relative;
+}
+
+.ip-shell .ip-mode + .ip-mode::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: var(--border);
+}
+
+.ip-shell .ip-modehead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ip-shell .ip-modetitle {
+  font-weight: 600;
+}
+
+.ip-shell .ip-switch {
+  min-width: 40px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--foreground) 10%, var(--surface));
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+
+.ip-shell .ip-switch.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ip-shell .ip-modebody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 关掉的那一栏：控件变灰、点不动 */
+.ip-shell .ip-mode:not(.ip-mode-on) .ip-modebody {
+  pointer-events: none;
+  filter: grayscale(0.6);
+}
+
+/* 推送页的 Token 提示：贴近下面第一张卡片 */
+.ip-shell .ip-tokenhint {
+  margin: 0 0 4px;
+}

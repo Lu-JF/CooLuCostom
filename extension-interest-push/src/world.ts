@@ -31,7 +31,7 @@ import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
 import { keepsInPool, pickManualCandidate, pickPushCandidate, sortForList, type PickOptions } from './pick.ts';
 import { readReview, reviewItem } from './review.ts';
-import { decide, type ScheduleConfig } from './schedule.ts';
+import { decideFixed, decideRandom, nextWindowAt, randomNextAt, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
 import { translate } from './translate.ts';
 import type { InterestPushView, InterestRecord, NewsItem, ReviewState, TranslationState } from './view-types.ts';
@@ -76,6 +76,8 @@ interface PersistedState {
   pushedToday: number;
   lastWindowKey: string | null;
   lastPushAt: number | null;
+  /** 随机模式下一次该醒来的时刻（epoch ms）。 */
+  nextPushAt?: number | null;
   lastCheckAt: number | null;
   answerCursor: number;
   conditional: Record<string, { etag?: string; lastModified?: string }>;
@@ -93,6 +95,7 @@ const EMPTY_STATE: PersistedState = {
   pushedToday: 0,
   lastWindowKey: null,
   lastPushAt: null,
+  nextPushAt: null,
   lastCheckAt: null,
   answerCursor: 0,
   conditional: {},
@@ -141,7 +144,7 @@ export class InterestPushWorld implements World {
     // 占位符名不用连字符：模板渲染只认 [\w.] 一类的名字，带连字符的会被原样留下。
     return {
       'interestpush.status': this.statusText(),
-      'interestpush.rounds': String(Math.max(1, Math.floor(this.opts.cfg.maxRounds))),
+      'interestpush.rounds': '4',
     };
   }
 
@@ -238,12 +241,11 @@ export class InterestPushWorld implements World {
   private scheduleConfig(): ScheduleConfig {
     const cfg = this.opts.cfg;
     return {
-      checkMinutes: cfg.checkMinutes,
+      mode: cfg.pushMode,
       pushTimes: cfg.pushTimes,
+      minIntervalMinutes: cfg.minIntervalMinutes,
       dailyCap: cfg.dailyCap,
-      quiet: cfg.quiet,
       pushDays: cfg.pushDays,
-      maxRounds: cfg.maxRounds,
       pausedUntil: cfg.pausedUntil,
     };
   }
@@ -259,27 +261,35 @@ export class InterestPushWorld implements World {
     this.checkTimer.unref?.();
   }
 
-  /** 下一个推送时刻（本地时间）的毫秒戳；没有可用的窗口时返回 null。 */
+  /** 定时模式下的下一个推送时刻（按星期与时刻算）。 */
   nextWindowAt(): number | null {
     const now = new Date(this.now());
-    const times = this.opts.cfg.pushTimes.map((s) => parseTime(s)).filter((v): v is { h: number; m: number } => v !== null);
+    const times = this.opts.cfg.pushTimes;
     if (times.length === 0) return null;
-    for (let dayOffset = 0; dayOffset <= 1; dayOffset += 1) {
+    for (let dayOffset = 0; dayOffset <= 7; dayOffset += 1) {
       const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + dayOffset);
       const iso = day.getDay() === 0 ? 7 : day.getDay();
       if (!this.opts.cfg.pushDays.includes(iso)) continue;
-      for (const { h, m } of [...times].sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m))) {
-        const at = new Date(day.getFullYear(), day.getMonth(), day.getDate(), h, m, 0, 0).getTime();
-        if (at > now.getTime()) return at;
-      }
+      const at = nextWindowAt(times, dayOffset === 0 ? now : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0, 0));
+      if (at !== null && at > now.getTime()) return at;
     }
     return null;
+  }
+
+  /** 下一次该唤醒的时刻：两种模式各算各的。 */
+  private nextPushAt(): number | null {
+    const cfg = this.opts.cfg;
+    if (cfg.pushMode === 'random') {
+      if (this.state.nextPushAt !== null && this.state.nextPushAt !== undefined) return this.state.nextPushAt;
+      return randomNextAt(this.state.lastPushAt, cfg.minIntervalMinutes, this.now());
+    }
+    return this.nextWindowAt();
   }
 
   private schedulePush(): void {
     if (this.pushTimer) clearTimeout(this.pushTimer);
     this.pushTimer = null;
-    const at = this.nextWindowAt();
+    const at = this.nextPushAt();
     if (at === null) return;
     const delay = Math.max(5_000, at - this.now());
     this.pushTimer = setTimeout(() => {
@@ -312,16 +322,37 @@ export class InterestPushWorld implements World {
     this.scanAnswers();
 
     if (reason === 'window') {
-      const decision = decide(this.scheduleConfig(), new Date(this.now()), {
+      const cfg = this.opts.cfg;
+      const state = {
         pushedToday: this.state.pushedToday,
         lastWindowKey: this.state.lastWindowKey,
-      });
-      if (decision.push) {
-        const item = this.pickPushItem();
-        if (item) await this.pushItem(item, decision.windowKey);
-        else this.log('窗口到点，但没有新条目可推');
+        lastPushAt: this.state.lastPushAt,
+      };
+      if (cfg.pushMode === 'random') {
+        const nextAt = this.state.nextPushAt ?? this.now();
+        const decision = decideRandom(this.scheduleConfig(), new Date(this.now()), state, nextAt);
+        if (decision.push) {
+          const item = this.pickPushItem();
+          if (item) await this.pushItem(item, null);
+          else this.log('随机推送到点，但没有新条目可推');
+          // 推完重新排下一次；没得推也往后挪，免得立刻又醒。
+          this.state.nextPushAt = randomNextAt(this.now(), cfg.minIntervalMinutes, this.now());
+        } else {
+          this.log(`随机推送不打扰：${decision.reason}`);
+          this.state.nextPushAt =
+            decision.reason === 'daily-cap' || decision.reason === 'day-off'
+              ? this.now() + 60 * 60_000
+              : this.now() + 5 * 60_000;
+        }
       } else {
-        this.log(`窗口不打扰：${decision.reason}`);
+        const decision = decideFixed(this.scheduleConfig(), new Date(this.now()), state);
+        if (decision.push) {
+          const item = this.pickPushItem();
+          if (item) await this.pushItem(item, decision.windowKey);
+          else this.log('窗口到点，但没有新条目可推');
+        } else {
+          this.log(`窗口不打扰：${decision.reason}`);
+        }
       }
     }
     this.saveState();
@@ -901,11 +932,11 @@ export class InterestPushWorld implements World {
     return {
       config: {
         checkMinutes: cfg.checkMinutes,
+        pushMode: cfg.pushMode,
         pushTimes: [...cfg.pushTimes],
+        minIntervalMinutes: cfg.minIntervalMinutes,
         dailyCap: cfg.dailyCap,
-        quiet: [...cfg.quiet],
         pushDays: [...cfg.pushDays],
-        maxRounds: cfg.maxRounds,
         pausedUntil: cfg.pausedUntil,
         keywords: [...cfg.keywords],
         journals: cfg.journals.map((j) => ({ ...j })),
@@ -919,7 +950,6 @@ export class InterestPushWorld implements World {
         requireAbstract: cfg.requireAbstract,
         allowNoAbstractPush: cfg.allowNoAbstractPush,
         openAlexKeySet: (this.opts.secret?.('OPENALEX_API_KEY') ?? '') !== '',
-        quietConflicts: this.quietConflicts(),
       },
       schedule: {
         lastCheckAt: this.state.lastCheckAt,
@@ -927,6 +957,7 @@ export class InterestPushWorld implements World {
         pushedToday: this.state.pushedToday,
         paused: cfg.pausedUntil > this.now(),
         nextCheckAt: this.state.lastCheckAt === null ? null : this.state.lastCheckAt + Math.max(1, cfg.checkMinutes) * 60_000,
+        nextPushAt: this.nextPushAt(),
       },
       records: [...this.records.values()].sort((a, b) => b.savedAt - a.savedAt),
       items: this.items.map((item) => ({
@@ -1041,15 +1072,6 @@ export class InterestPushWorld implements World {
       }
       return v;
     };
-    /** 静默起止：只校验合法性，不排序——跨夜时段（22:30 → 08:30）排一下就反了。 */
-    const quietPair = (value: unknown, fallback: string[]): string[] => {
-      const list = (Array.isArray(value) ? value : String(value ?? '').split(','))
-        .map((v) => String(v).trim())
-        .filter((v) => parseTime(v) !== null);
-      const first = list[0] ?? fallback[0] ?? '22:30';
-      const second = list[1] ?? fallback[1] ?? '08:30';
-      return [first, second];
-    };
     const times = (value: unknown, fallback: string[]): string[] => {
       if (value === undefined) return fallback;
       const list = (Array.isArray(value) ? value : String(value).split(','))
@@ -1079,12 +1101,11 @@ export class InterestPushWorld implements World {
 
     const patch: Partial<InterestPushConfigSection> = {
       checkMinutes: num(raw.checkMinutes, 5, 1440, cfg.checkMinutes),
+      pushMode: raw.pushMode === 'random' ? 'random' : raw.pushMode === 'fixed' ? 'fixed' : cfg.pushMode,
       pushTimes: times(raw.pushTimes, cfg.pushTimes),
+      minIntervalMinutes: num(raw.minIntervalMinutes, 5, 1440, cfg.minIntervalMinutes),
       dailyCap: num(raw.dailyCap, 1, 10, cfg.dailyCap),
-      // 静默时段是两个时刻的「起 → 止」，顺序有意义（22:30→08:30 是跨夜），不能像时刻表那样排序。
-      quiet: quietPair(raw.quiet, cfg.quiet),
       pushDays: raw.pushDays === undefined ? cfg.pushDays : days.length > 0 ? [...new Set(days)].sort((a, b) => a - b) : (clamped = true, cfg.pushDays),
-      maxRounds: num(raw.maxRounds, 1, 5, cfg.maxRounds),
       pausedUntil: Math.max(0, Math.round(Number(raw.pausedUntil ?? 0)) || 0),
       keywords: raw.keywords === undefined ? cfg.keywords : lines(raw.keywords, 30),
       // 期刊与术语表都只由 add/remove 方法改，面板的保存不再覆盖它们。
@@ -1123,11 +1144,11 @@ export class InterestPushWorld implements World {
     const cfg = this.opts.cfg;
     const snap = {
       checkMinutes: cfg.checkMinutes,
+      pushMode: cfg.pushMode,
       pushTimes: [...cfg.pushTimes],
+      minIntervalMinutes: cfg.minIntervalMinutes,
       dailyCap: cfg.dailyCap,
-      quiet: [...cfg.quiet],
       pushDays: [...cfg.pushDays],
-      maxRounds: cfg.maxRounds,
       keywords: [...cfg.keywords],
       arxivCats: [...cfg.arxivCats],
       windowDays: cfg.windowDays,
@@ -1196,20 +1217,6 @@ export class InterestPushWorld implements World {
       }
       if (removed > 0) this.log(`清理 ${dir} 缓存 ${removed} 条（不在当前列表）`);
     }
-  }
-
-  /** 落在静默时段里的推送时刻：配置页据此提示，避免设了却不生效。 */
-  private quietConflicts(): string[] {
-    const start = parseTime(this.opts.cfg.quiet[0] ?? '');
-    const end = parseTime(this.opts.cfg.quiet[1] ?? '');
-    if (!start || !end) return [];
-    const a = start.h * 60 + start.m;
-    const b = end.h * 60 + end.m;
-    const inside = (m: number): boolean => (a <= b ? m >= a && m < b : m >= a || m < b);
-    return this.opts.cfg.pushTimes.filter((text) => {
-      const p = parseTime(text);
-      return p !== null && inside(p.h * 60 + p.m);
-    });
   }
 
   /** 早期默认表把 Structural Health Monitoring 的 ISSN 写成了 1477-9217，读到就改回来。 */
@@ -1342,6 +1349,7 @@ export class InterestPushWorld implements World {
       this.state.pushedDay = key;
       this.state.pushedToday = 0;
       this.state.lastWindowKey = null;
+      this.state.nextPushAt = null;
     }
   }
 

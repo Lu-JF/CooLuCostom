@@ -93,22 +93,26 @@ export interface InterestText {
     checking: string;
     groupPush: string;
     blockFrequency: string;
-    blockWindows: string;
+    modeRandom: string;
+    modeFixed: string;
+    modeOn: string;
+    modeOff: string;
+    minInterval: string;
+    randomHint: string;
+    fixedHint: string;
+    checkMinutesHint: string;
     blockDays: string;
     blockInterest: string;
     blockWindow: string;
     blockAbstract: string;
     blockDownload: string;
     abstractHint: string;
-    quietConflict: (times: string) => string;
     groupSources: string;
     groupTranslate: string;
     checkMinutes: string;
     pushTimes: string;
     dailyCap: string;
-    quiet: string;
     pushDays: string;
-    maxRounds: string;
     pausedUntil: string;
     resumNow: string;
     keywords: string;
@@ -151,8 +155,6 @@ export interface InterestText {
     addTime: string;
     addKeyword: string;
     keywordPlaceholder: string;
-    quietStart: string;
-    quietEnd: string;
     saveSection: string;
     saveSectionOf: (name: string) => string;
     savedSection: (name: string) => string;
@@ -276,23 +278,27 @@ const zh: InterestText = {
     pushNow: '立刻推一条（试）',
     checking: '正在检查…',
     groupPush: '推送节奏',
-    blockFrequency: '频率与上限',
-    blockWindows: '时段',
+    blockFrequency: '后台抓取',
+    modeRandom: '随机推送',
+    modeFixed: '定时推送',
+    modeOn: '开',
+    modeOff: '关',
+    minInterval: '最小间隔（分钟）',
+    randomHint: '两次推送至少隔这么久；超过之后越久越可能推，每天不超过上面的条数。',
+    fixedHint: '只在这些时刻推送，每个时刻一天一次。',
+    checkMinutesHint: '后台多久去各期刊与 arXiv 看一次有没有新论文；不影响推送时刻。',
     blockDays: '星期与暂停',
     blockInterest: '研究兴趣',
     blockWindow: '抓取窗口',
     blockAbstract: '摘要策略',
     blockDownload: '下载',
     abstractHint: '无摘要的条目不推送，保留在列表中，每日重试。',
-    quietConflict: (times) => `这些推送时刻落在静默时段内，不会触发：${times}`,
     groupSources: '数据源',
     groupTranslate: '翻译',
     checkMinutes: '检查间隔（分钟）',
     pushTimes: '推送时刻',
     dailyCap: '每天最多几条',
-    quiet: '静默时段',
     pushDays: '允许推送的星期',
-    maxRounds: '气泡对话轮次上限',
     pausedUntil: '暂停到',
     resumNow: '取消暂停',
     clearPause: '清空',
@@ -341,8 +347,6 @@ const zh: InterestText = {
     addTime: '增加时刻',
     addKeyword: '增加关键词',
     keywordPlaceholder: '输入关键词后回车',
-    quietStart: '静默起',
-    quietEnd: '静默止',
     saveSection: '保存本组',
     saveSectionOf: (name) => `保存${name}`,
     savedSection: (name) => `${name}已保存`,
@@ -465,23 +469,27 @@ const en: InterestText = {
     pushNow: 'Push one now (test)',
     checking: 'Checking…',
     groupPush: 'Cadence',
-    blockFrequency: 'Frequency and caps',
-    blockWindows: 'Time windows',
+    blockFrequency: 'Background refresh',
+    modeRandom: 'Random',
+    modeFixed: 'Scheduled',
+    modeOn: 'On',
+    modeOff: 'Off',
+    minInterval: 'Minimum gap (minutes)',
+    randomHint: 'At least this long between pushes; the longer it has been, the more likely a push. Capped per day.',
+    fixedHint: 'Push only at these times, once per time per day.',
+    checkMinutesHint: 'How often to look for new papers in the background. Does not affect push times.',
     blockDays: 'Days and pause',
     blockInterest: 'Research interests',
     blockWindow: 'Crawl window',
     blockAbstract: 'Abstracts',
     blockDownload: 'Download',
     abstractHint: 'Items without an abstract are not pushed; kept in the list and retried daily.',
-    quietConflict: (times) => `These push times fall inside the quiet window and will not fire: ${times}`,
     groupSources: 'Sources',
     groupTranslate: 'Translation',
     checkMinutes: 'Check interval (minutes)',
     pushTimes: 'Push times',
     dailyCap: 'Max pushes per day',
-    quiet: 'Quiet hours',
     pushDays: 'Allowed weekdays',
-    maxRounds: 'Max bubble rounds',
     pausedUntil: 'Paused until',
     resumNow: 'Resume now',
     clearPause: 'Clear',
@@ -530,8 +538,6 @@ const en: InterestText = {
     addTime: 'Add time',
     addKeyword: 'Add keyword',
     keywordPlaceholder: 'Type a keyword and press Enter',
-    quietStart: 'Quiet from',
-    quietEnd: 'Quiet to',
     saveSection: 'Save',
     saveSectionOf: (name) => `Save ${name}`,
     savedSection: (name) => `${name} saved`,

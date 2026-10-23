@@ -56,30 +56,13 @@ function bundledTier(issn: string): { tier: string; tierBasis: string } | null {
 }
 
 /**
- * 分区：内置表优先；表里没有的，看这家刊最早一篇是不是近四年内——
- * 是就标「新锐期刊」，否则「未标注」。免费接口拿不到中科院分区表，不猜。
+ * 分区：内置表里有的直接用；表外的标「未标注」。
+ * 免费接口没有中科院分区数据，这里不猜。
  */
-export async function resolveTier(issn: string, deps: FetchDeps): Promise<{ tier: string; tierBasis: string }> {
+export async function resolveTier(issn: string, _deps: FetchDeps): Promise<{ tier: string; tierBasis: string }> {
   const known = bundledTier(issn);
   if (known !== null) return known;
-  const doFetch = resolveFetch(deps);
-  try {
-    const url =
-      `https://api.crossref.org/journals/${encodeURIComponent(issn)}/works` +
-      `?sort=published&order=asc&rows=1&select=published&mailto=${encodeURIComponent(deps.mailto)}`;
-    const res = await doFetch(url, { headers: { Accept: 'application/json' } });
-    if (res.ok) {
-      const body = (await res.json()) as { message?: { items?: Array<{ published?: { 'date-parts'?: number[][] } }> } };
-      const parts = body?.message?.items?.[0]?.published?.['date-parts']?.[0];
-      const year = Array.isArray(parts) ? Number(parts[0]) : NaN;
-      if (Number.isFinite(year) && new Date().getFullYear() - year <= 4) {
-        return { tier: '新锐期刊', tierBasis: `Crossref 最早一篇 ${year} 年，暂无分区` };
-      }
-    }
-  } catch {
-    /* 查不到就按未标注 */
-  }
-  return { tier: '未标注', tierBasis: '免费接口没有分区数据，可人工在说明里补充' };
+  return { tier: '未标注', tierBasis: '表内没有分区数据' };
 }
 
 /** 试抓一条：证明这个 ISSN 真能取到论文。 */
