@@ -271,6 +271,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   });
   top.append(nextBtn, note);
   ctx.root.appendChild(top);
+  ctx.root.appendChild(ui.h('div', 'ip-note ip-tokenhint', t.detail.tokenHint));
 
   // 大肥鱼速评：卡片排最上面——气泡推送也是先念这一段，页面顺序与对话顺序保持一致。
   const reviewCard = ui.sheet({ title: t.detail.reviewTitle });
@@ -800,6 +801,22 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const rowsInput = numberInput(ui, '50');
   const delayInput = numberInput(ui, '14', '4.5em');
   const mailtoInput = ui.input({ placeholder: 'name@example.org' });
+  // 旁边的「!」：点开说明这个地址会被发给谁、有什么用。
+  const mailtoHelpBody = ui.h('div', 'ip-help');
+  for (const para of t.settings.mailtoHelp.split('\n\n')) mailtoHelpBody.appendChild(ui.h('p', '', para));
+  const mailtoHelpBtn = ui.button('!', {
+    size: 'sm',
+    variant: 'plain',
+    onClick: () => {
+      mailtoHelpBtn.classList.add('ip-helpbtn-on');
+      const drawer = ui.drawer(t.settings.mailtoHelpTitle, mailtoHelpBody);
+      void drawer;
+    },
+  });
+  mailtoHelpBtn.classList.add('ip-helpbtn');
+  mailtoHelpBtn.title = t.settings.mailtoHelpTitle;
+  const mailtoWrap = ui.h('div', 'ip-withhelp');
+  mailtoWrap.append(mailtoInput, mailtoHelpBtn);
   const dirInput = ui.input({ placeholder: '' });
   const dirBar = ui.h('div', 'ip-inline');
   dirBar.append(
@@ -836,7 +853,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
       fieldRow(ui, t.settings.arxivCats, ui.h('div')),
       catsEditor.el,
     ),
-    block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoInput)),
+    block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoWrap)),
     block(ui, t.settings.blockAbstract, abstractBox.el, bareBox.el, ui.msgline(t.settings.abstractHint)),
     block(ui, t.settings.blockDownload, fieldRow(ui, t.settings.downloadDir, dirBar)),
     block(ui, t.settings.blockOpenAlex, keyRow, keyState, ui.msgline(t.settings.openAlexHint)),

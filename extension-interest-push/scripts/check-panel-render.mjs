@@ -107,6 +107,10 @@ try {
   const detailOk = await openPanel('detail', '.ip-ov-title');
   check('推送页签排第一且挂上了', detailOk);
   await page.waitForFunction(() => (document.querySelector('.ip-detail')?.querySelectorAll('tr').length ?? 0) >= 5, null, { timeout: 40_000 }).catch(() => {});
+  check(
+    '推送页写明速评与翻译会消耗 Token',
+    ((await page.evaluate(() => document.querySelector('.ip-tokenhint')?.textContent ?? '')) || '').includes('消耗 Token'),
+  );
   const detail = await page.evaluate(() => ({
     text: document.body.textContent ?? '',
     title: document.querySelector('.ip-ov-title')?.textContent ?? '',
@@ -265,6 +269,17 @@ try {
   // ---- 配置页签
   const settingsOk = await openPanel('settings', '.ip-gridhead');
   check('配置页签挂上了', settingsOk);
+  const helpBtn = await page.$('.ip-helpbtn');
+  check('Crossref 邮箱旁有说明按钮', helpBtn !== null);
+  if (helpBtn !== null) {
+    await helpBtn.click();
+    await page.waitForTimeout(600);
+    const helpText = await page.evaluate(() => document.querySelector('.modalcard')?.textContent ?? '');
+    check('点「!」能看到邮箱作用的说明', helpText.includes('Crossref') && helpText.includes('礼貌'),
+      helpText.slice(0, 40));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
   await page.waitForFunction(() => (document.querySelectorAll('.ip-jrow').length ?? 0) > 0, null, { timeout: 30_000 }).catch(() => {});
   const cfg = await page.evaluate(() => {
     const text = document.body.textContent ?? '';

@@ -43,6 +43,7 @@ export interface InterestText {
   detail: {
     pick: string;
     overviewTitle: string;
+    tokenHint: string;
     reviewTitle: string;
     reviewAsk: string;
     reviewNone: string;
@@ -117,6 +118,8 @@ export interface InterestText {
     rowsPerJournal: string;
     journalDelayDays: string;
     mailto: string;
+    mailtoHelpTitle: string;
+    mailtoHelp: string;
     downloadDir: string;
     requireAbstract: string;
     allowNoAbstract: string;
@@ -212,6 +215,7 @@ const zh: InterestText = {
   detail: {
     pick: '还没有条目。先去「配置」页签点一次检查。',
     overviewTitle: '论文速览',
+    tokenHint: '「大肥鱼速评」和「翻译」功能会消耗 Token。',
     reviewTitle: '大肥鱼速评',
     reviewAsk: '让大肥鱼评一下',
     reviewNone: '这篇还没评过',
@@ -287,6 +291,12 @@ const zh: InterestText = {
     rowsPerJournal: '每刊每次取多少条',
     journalDelayDays: '期刊延迟天数',
     mailto: 'Crossref 邮箱',
+    mailtoHelpTitle: 'Crossref 邮箱有什么用',
+    mailtoHelp:
+      '这个地址会随请求发给 Crossref、OpenAlex 与 Semantic Scholar。\n\n' +
+      'Crossref 把它当作「可联系的使用者」，请求走礼貌队列，速率与响应更稳；不带邮箱的请求归入公共池，高峰期更容易被限流或超时。\n\n' +
+      '不是账号，不需要注册或验证，也不会收到订阅邮件。只有在请求明显异常时，Crossref 才可能按这个地址联系你。\n\n' +
+      '建议填一个常用邮箱，例如你的学校邮箱。',
     downloadDir: '下载目录',
     requireAbstract: '只推送有摘要的条目（推荐）',
     allowNoAbstract: '没有可推条目时允许推缺摘要的（仅手动）',
@@ -382,6 +392,7 @@ const en: InterestText = {
   detail: {
     pick: 'Nothing yet. Run a check on the Settings tab.',
     overviewTitle: 'Overview',
+    tokenHint: 'The quick review and the translation both call the model and consume tokens.',
     reviewTitle: 'Big Fish take',
     reviewAsk: 'Let Big Fish rate it',
     reviewNone: 'Not reviewed yet',
@@ -456,7 +467,13 @@ const en: InterestText = {
     windowDays: 'Only last N days',
     rowsPerJournal: 'Rows per journal',
     journalDelayDays: 'Journal delay (days)',
-    mailto: 'Crossref mailto',
+    mailto: 'Crossref email',
+    mailtoHelpTitle: 'What is this email for',
+    mailtoHelp:
+      'The address is sent with requests to Crossref, OpenAlex and Semantic Scholar.\n\n' +
+      'Crossref treats it as a contact for the polite pool, which gives steadier rate limits and response times; requests without an email land in the public pool and get throttled sooner at peak times.\n\n' +
+      'It is not an account: no signup, no verification, no newsletters. Crossref only uses it to reach you if your traffic looks abnormal.\n\n' +
+      'Use an address you actually read, for example your university email.',
     downloadDir: 'Download dir',
     requireAbstract: 'Only push items that have an abstract',
     allowNoAbstract: 'Allow items without an abstract when nothing else is left (manual only)',

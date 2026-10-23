@@ -783,3 +783,38 @@
 .ip-shell .ip-keyrow button {
   flex: 0 0 auto;
 }
+
+/* 邮箱旁边的小问号/感叹号：圆形、低调，点开是说明抽屉 */
+.ip-shell .ip-withhelp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ip-shell .ip-withhelp input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ip-shell .ip-helpbtn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 推送页的 Token 提示：一行灰字，不抢内容 */
+.ip-shell .ip-tokenhint {
+  margin: 2px 0 10px;
+  font-size: 12px;
+  color: var(--ip-ink-soft);
+}
+
+.ip-shell .ip-help p {
+  margin: 0 0 10px;
+  line-height: 1.7;
+}

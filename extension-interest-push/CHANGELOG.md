@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2
+
+- 推送页提示「大肥鱼速评」与「翻译」会消耗 Token。
+- Crossref 邮箱旁新增「!」，点开说明该地址的作用与礼貌队列机制。
+
 ## 0.9.0
 
 - npm 包名改为 `cortico-world-dailypaper`。
