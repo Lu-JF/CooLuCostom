@@ -92,7 +92,6 @@ export interface InterestText {
     pushNow: string;
     checking: string;
     groupPush: string;
-    blockFrequency: string;
     modeRandom: string;
     modeFixed: string;
     modeOn: string;
@@ -100,7 +99,6 @@ export interface InterestText {
     minInterval: string;
     randomHint: string;
     fixedHint: string;
-    checkMinutesHint: string;
     blockDays: string;
     blockInterest: string;
     blockWindow: string;
@@ -109,7 +107,6 @@ export interface InterestText {
     abstractHint: string;
     groupSources: string;
     groupTranslate: string;
-    checkMinutes: string;
     pushTimes: string;
     dailyCap: string;
     pushDays: string;
@@ -119,6 +116,10 @@ export interface InterestText {
     journals: string;
     arxivCats: string;
     windowDays: string;
+    windowDaysHint: string;
+    rowsPerJournalHint: string;
+    journalDelayHint: string;
+    mailtoHint: string;
     rowsPerJournal: string;
     journalDelayDays: string;
     mailto: string;
@@ -274,28 +275,25 @@ const zh: InterestText = {
     save: '保存',
     saved: '已保存',
     checkNow: '重新爬取一次',
-    checkNowHint: '重新抓取所有源并回填摘要，约需 30–60 秒，期间页面可正常使用。',
+    checkNowHint: '重新抓取全部数据源并回填摘要，约 30–60 秒，期间可继续操作。',
     pushNow: '立刻推一条（试）',
     checking: '正在检查…',
     groupPush: '推送节奏',
-    blockFrequency: '后台抓取',
     modeRandom: '随机推送',
     modeFixed: '定时推送',
     modeOn: '开',
     modeOff: '关',
     minInterval: '最小间隔（分钟）',
-    randomHint: '两次推送至少隔这么久；超过之后越久越可能推，每天不超过上面的条数。',
-    fixedHint: '只在这些时刻推送，每个时刻一天一次。',
-    checkMinutesHint: '后台多久去各期刊与 arXiv 看一次有没有新论文；不影响推送时刻。',
+    randomHint: '两次推送至少相隔该时长；间隔越久，推送概率越高。每日条数为上限。',
+    fixedHint: '只在这些时刻推送，每个时刻每天一次。',
     blockDays: '星期与暂停',
     blockInterest: '研究兴趣',
     blockWindow: '抓取窗口',
     blockAbstract: '摘要策略',
     blockDownload: '下载',
-    abstractHint: '无摘要的条目不推送，保留在列表中，每日重试。',
+    abstractHint: '无摘要的条目不自动推送，保留在列表并每日重试。',
     groupSources: '数据源',
     groupTranslate: '翻译',
-    checkMinutes: '检查间隔（分钟）',
     pushTimes: '推送时刻',
     dailyCap: '每天最多几条',
     pushDays: '允许推送的星期',
@@ -304,11 +302,15 @@ const zh: InterestText = {
     clearPause: '清空',
     keywords: '研究领域关键词',
     journals: '期刊集合',
-    arxivCats: 'arXiv 分类',
-    windowDays: '只看最近多少天',
-    rowsPerJournal: '每刊每次取多少条',
-    journalDelayDays: '期刊延迟天数',
+    arxivCats: 'arXiv 源',
+    windowDays: '抓取窗口（天）',
+    windowDaysHint: '只看最近多少天内上线的条目。',
+    rowsPerJournal: '每刊条数',
+    rowsPerJournalHint: '每个期刊一次取多少条，越多越慢。',
+    journalDelayDays: '期刊延迟（天）',
+    journalDelayHint: '跳过最近 N 天发表的期刊文章，等摘要写入后再抓；0 表示不延迟。',
     mailto: 'Crossref 邮箱',
+    mailtoHint: '随请求发给 Crossref，只为走礼貌队列，不是账号。',
     mailtoHelpTitle: 'Crossref 邮箱有什么用',
     mailtoHelp:
       '这个地址会随请求发给 Crossref、OpenAlex 与 Semantic Scholar。\n\n' +
@@ -320,8 +322,7 @@ const zh: InterestText = {
     allowNoAbstract: '没有可推条目时允许推缺摘要的（仅手动）',
     blockOpenAlex: '摘要与机构的数据源密钥',
     openAlexKey: 'OpenAlex 密钥',
-    openAlexHint:
-      '在 openalex.org 用邮箱免费申请，邮件里的链接点开即可拿到 key。配好后摘要与机构回填走你自己的额度，不再受共享额度的限制；不填也能用，只是每天可能被限流。',
+    openAlexHint: '在 openalex.org 用邮箱免费申请；配置后摘要与机构回填使用自有额度，不配置则受共享额度限流。',
     openAlexPlaceholder: '粘贴 key 后保存；留空表示不改动',
     openAlexSave: '保存密钥',
     openAlexSet: '已配置',
@@ -329,7 +330,7 @@ const zh: InterestText = {
     openAlexBad: 'key 格式不对，应为 8–64 位字母、数字、下划线或连字符',
     glossary: '翻译术语表',
     addJournal: '增加期刊',
-    addJournalHint: '填 8 位 ISSN 即可，刊名与分区自动识别；保存时会试抓一篇，抓不到不入库。',
+    addJournalHint: '输入 8 位 ISSN；刊名与分区自动识别，保存时试抓一篇，抓不到不入库。',
     testJournals: '检测全部期刊',
     issnBad: 'ISSN 格式不对，应为 8 位，例如 0888-3270',
     journalExists: (issn) => `这家刊已经在列表里（${issn}）`,
@@ -341,7 +342,7 @@ const zh: InterestText = {
     termBad: '词条要写成「英文 | 中文」两段',
     termExists: '这个词条已经在表里',
     termUnknown: '表里没有这个词条',
-    arxivReadonly: '按关键词检索时不用分类，这一项仅在关键词为空时作为兜底，固定不可改。',
+    arxivReadonly: '关键词检索不使用分类；仅在关键词为空时按源抓取。固定不可改。',
     remove: '删除',
     groupTags: '点右侧「✕」删掉，用下面的菜单或输入框增加',
     addTime: '增加时刻',
@@ -352,7 +353,7 @@ const zh: InterestText = {
     savedSection: (name) => `${name}已保存`,
     savedSectionAdjusted: (name) => `${name}已保存，个别数值按合法范围调整`,
     saveSectionFailed: (name) => `${name}未生效，请重试`,
-    journalNote: '分区标签参照 2025 中科院分区表与 JCR 2024；表里没有的刊按 Crossref 最早一篇判断，四年内创刊标「新锐期刊」，其余「未标注」。',
+    journalNote: '分区参照 2025 中科院分区表与 JCR 2024；表外的刊标为「未标注」。',
     colLabel: '刊名',
     colIssn: 'ISSN',
     colTier: '分区标签',
@@ -469,15 +470,13 @@ const en: InterestText = {
     pushNow: 'Push one now (test)',
     checking: 'Checking…',
     groupPush: 'Cadence',
-    blockFrequency: 'Background refresh',
     modeRandom: 'Random',
     modeFixed: 'Scheduled',
     modeOn: 'On',
     modeOff: 'Off',
     minInterval: 'Minimum gap (minutes)',
-    randomHint: 'At least this long between pushes; the longer it has been, the more likely a push. Capped per day.',
+    randomHint: 'At least this long between pushes; the longer the gap, the higher the chance. Daily cap applies.',
     fixedHint: 'Push only at these times, once per time per day.',
-    checkMinutesHint: 'How often to look for new papers in the background. Does not affect push times.',
     blockDays: 'Days and pause',
     blockInterest: 'Research interests',
     blockWindow: 'Crawl window',
@@ -486,7 +485,6 @@ const en: InterestText = {
     abstractHint: 'Items without an abstract are not pushed; kept in the list and retried daily.',
     groupSources: 'Sources',
     groupTranslate: 'Translation',
-    checkMinutes: 'Check interval (minutes)',
     pushTimes: 'Push times',
     dailyCap: 'Max pushes per day',
     pushDays: 'Allowed weekdays',
@@ -496,10 +494,14 @@ const en: InterestText = {
     keywords: 'Research keywords',
     journals: 'Journal set',
     arxivCats: 'arXiv categories',
-    windowDays: 'Only last N days',
+    windowDays: 'Window (days)',
+    windowDaysHint: 'Only items published within this many days.',
     rowsPerJournal: 'Rows per journal',
+    rowsPerJournalHint: 'How many items to take per journal each run; higher is slower.',
     journalDelayDays: 'Journal delay (days)',
+    journalDelayHint: 'Skip journal papers published in the last N days so abstracts can appear; 0 disables.',
     mailto: 'Crossref email',
+    mailtoHint: 'Sent with requests to Crossref for the polite pool; not an account.',
     mailtoHelpTitle: 'What is this email for',
     mailtoHelp:
       'The address is sent with requests to Crossref, OpenAlex and Semantic Scholar.\n\n' +

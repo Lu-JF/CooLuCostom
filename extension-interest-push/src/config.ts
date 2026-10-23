@@ -68,7 +68,7 @@ export interface InterestPushConfigSection {
 
 export const INTEREST_PUSH_DEFAULTS: InterestPushConfigSection = {
   enabled: false,
-  checkMinutes: 120,
+  checkMinutes: 1440,
   pushMode: 'fixed',
   pushTimes: ['10:30', '13:00', '19:30'],
   minIntervalMinutes: 120,

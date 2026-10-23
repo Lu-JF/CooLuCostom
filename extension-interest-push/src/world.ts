@@ -342,7 +342,7 @@ export class InterestPushWorld implements World {
           this.state.nextPushAt =
             decision.reason === 'daily-cap' || decision.reason === 'day-off'
               ? this.now() + 60 * 60_000
-              : this.now() + 5 * 60_000;
+              : randomNextAt(this.now(), cfg.minIntervalMinutes, this.now());
         }
       } else {
         const decision = decideFixed(this.scheduleConfig(), new Date(this.now()), state);
@@ -1103,7 +1103,7 @@ export class InterestPushWorld implements World {
       checkMinutes: num(raw.checkMinutes, 5, 1440, cfg.checkMinutes),
       pushMode: raw.pushMode === 'random' ? 'random' : raw.pushMode === 'fixed' ? 'fixed' : cfg.pushMode,
       pushTimes: times(raw.pushTimes, cfg.pushTimes),
-      minIntervalMinutes: num(raw.minIntervalMinutes, 5, 1440, cfg.minIntervalMinutes),
+      minIntervalMinutes: num(raw.minIntervalMinutes, 1, 1440, cfg.minIntervalMinutes),
       dailyCap: num(raw.dailyCap, 1, 10, cfg.dailyCap),
       pushDays: raw.pushDays === undefined ? cfg.pushDays : days.length > 0 ? [...new Set(days)].sort((a, b) => a - b) : (clamped = true, cfg.pushDays),
       pausedUntil: Math.max(0, Math.round(Number(raw.pausedUntil ?? 0)) || 0),
@@ -1122,7 +1122,10 @@ export class InterestPushWorld implements World {
       allowNoAbstractPush:
         typeof raw.allowNoAbstractPush === 'boolean' ? raw.allowNoAbstractPush : cfg.allowNoAbstractPush,
     };
+    const modeChanged = patch.pushMode !== undefined && patch.pushMode !== cfg.pushMode;
     this.opts.persist(patch);
+    // 换了节奏或改了最小间隔，旧的随机时刻作废，按新参数重排。
+    if (modeChanged || patch.minIntervalMinutes !== undefined) this.state.nextPushAt = null;
     this.scheduleCheck();
     this.schedulePush();
     return clamped;

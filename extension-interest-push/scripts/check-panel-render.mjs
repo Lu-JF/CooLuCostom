@@ -321,7 +321,8 @@ try {
     };
   });
   check('四组卡片都在（节奏/数据源/期刊/翻译）', ['推送节奏', '数据源', '期刊集合', '翻译'].every((k) => cfg.text.includes(k)), '');
-  check('节奏字段齐（检查间隔/两种模式/最小间隔/上限/时刻/星期/暂停到）', ['检查间隔', '随机推送', '定时推送', '最小间隔', '每天最多几条', '推送时刻', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
+  check('节奏字段齐（两种模式/最小间隔/上限/时刻/星期/暂停到）', ['随机推送', '定时推送', '最小间隔', '每天最多几条', '推送时刻', '允许推送的星期', '暂停到'].every((k) => cfg.text.includes(k)), `${cfg.inputs} 个输入框`);
+  check('后台抓取间隔不再暴露给用户', !cfg.text.includes('检查间隔'), '');
   check('两种推送模式各有一个开关', cfg.text.includes('开') && cfg.text.includes('关') && cfg.switchCount >= 2, `${cfg.switchCount} 个开关`);
   check(
     '推送时刻与关键词是标签',
@@ -336,7 +337,7 @@ try {
   check('术语表只读，条目全是文本', cfg.termRows >= 30 && cfg.termInputs === 0, `${cfg.termRows} 行 / 输入框 ${cfg.termInputs} 个`);
   check('术语表用「增加词条」新增', cfg.text.includes('增加词条'), '');
   check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
-  check('有「期刊延迟天数」字段', cfg.text.includes('期刊延迟天数'), '');
+  check('有「期刊延迟天数」字段', cfg.text.includes('期刊延迟'), '');
   check('节奏与数据源各有一个保存按钮', cfg.text.includes('保存推送节奏') && cfg.text.includes('保存数据源') && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「重新爬取一次」与「立刻推一条」', cfg.text.includes('重新爬取一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');

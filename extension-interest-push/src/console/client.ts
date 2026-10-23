@@ -702,7 +702,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
   // ---- 推送节奏：两种模式并排，切换开关在各自左上角
   const cadence = ui.sheet({ title: t.settings.groupPush });
-  const checkInput = numberInput(ui, '120');
   const capInput = numberInput(ui, '2');
   const minGapInput = numberInput(ui, '120');
 
@@ -715,8 +714,8 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
   const randomCard = ui.h('div', 'ip-mode');
   const fixedCard = ui.h('div', 'ip-mode');
-  const randomSwitch = ui.button('', { size: 'sm', onClick: () => setMode('random') });
-  const fixedSwitch = ui.button('', { size: 'sm', onClick: () => setMode('fixed') });
+  const randomSwitch = ui.button('', { size: 'sm', onClick: () => setMode('random', true) });
+  const fixedSwitch = ui.button('', { size: 'sm', onClick: () => setMode('fixed', true) });
   randomSwitch.classList.add('ip-switch');
   fixedSwitch.classList.add('ip-switch');
 
@@ -739,8 +738,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
   const modeRow = ui.h('div', 'ip-modes');
   modeRow.append(randomCard, fixedCard);
 
-  const checkRow = ui.h('div', 'ip-fields');
-  checkRow.append(fieldRow(ui, t.settings.checkMinutes, checkInput));
 
   const week = weekdayButtons(ui);
   const weekRow = ui.h('div', 'ip-row-block');
@@ -785,7 +782,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
   keyRow.append(ui.h('span', 'ip-fieldlabel', t.settings.openAlexKey), keyInput, keySaveBtn);
 
   let mode: 'fixed' | 'random' = 'fixed';
-  function setMode(next: 'fixed' | 'random'): void {
+  function setMode(next: 'fixed' | 'random', persist = false): void {
     mode = next;
     randomCard.classList.toggle('ip-mode-on', next === 'random');
     fixedCard.classList.toggle('ip-mode-on', next === 'fixed');
@@ -793,6 +790,18 @@ function mountSettings(ctx: ConsolePanelContext): void {
     fixedSwitch.classList.toggle('on', next === 'fixed');
     randomSwitch.textContent = next === 'random' ? t.settings.modeOn : t.settings.modeOff;
     fixedSwitch.textContent = next === 'fixed' ? t.settings.modeOn : t.settings.modeOff;
+    // 开关本身就是即时生效的：立即保存模式，不等下面的保存按钮。
+    if (persist) {
+      void (async () => {
+        try {
+          const out = await ctx.invoke<InvokeResult>('saveSettings', [{ pushMode: next }]);
+          view = out.view;
+          render();
+        } catch (err) {
+          ui.toast(errText(err), 'bad');
+        }
+      })();
+    }
   }
 
   const cadenceSave = ui.button(t.settings.saveSectionOf(t.settings.groupPush), { variant: 'primary', size: 'sm', onClick: () => void saveCard('cadence') });
@@ -800,7 +809,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
   cadenceFoot.append(cadenceSave);
   cadence.body.append(
     modeRow,
-    block(ui, t.settings.blockFrequency, checkRow, ui.msgline(t.settings.checkMinutesHint)),
     block(ui, t.settings.blockDays, weekRow, pauseRow),
     cadenceFoot,
   );
@@ -814,7 +822,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     },
     signal: ctx.signal,
   });
-  const catsView = ui.h('div', 'ip-tags');
+  const catsView = ui.h('div', 'ip-taglist');
   const fillCats = (cats: string[]): void => {
     catsView.replaceChildren();
     for (const cat of cats) catsView.appendChild(ui.chip(cat, 'plain'));
@@ -857,11 +865,17 @@ function mountSettings(ctx: ConsolePanelContext): void {
       },
     }),
   );
-  const sourceNumbers = ui.h('div', 'ip-fields');
+  const sourceNumbers = ui.h('div', 'ip-windowfields');
+  const hintRow = (label: string, control: HTMLElement, hint: string): HTMLElement => {
+    const row = fieldRow(ui, label, control);
+    row.classList.add('ip-hintrow');
+    row.appendChild(ui.h('span', 'ip-fieldhint', hint));
+    return row;
+  };
   sourceNumbers.append(
-    fieldRow(ui, t.settings.windowDays, windowInput),
-    fieldRow(ui, t.settings.rowsPerJournal, rowsInput),
-    fieldRow(ui, t.settings.journalDelayDays, delayInput),
+    hintRow(t.settings.windowDays, windowInput, t.settings.windowDaysHint),
+    hintRow(t.settings.rowsPerJournal, rowsInput, t.settings.rowsPerJournalHint),
+    hintRow(t.settings.journalDelayDays, delayInput, t.settings.journalDelayHint),
   );
   const sourcesSave = ui.button(t.settings.saveSectionOf(t.settings.groupSources), { variant: 'primary', size: 'sm', onClick: () => void saveCard('sources') });
   const sourcesFoot = ui.rowbar();
@@ -876,7 +890,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
       catsView,
       ui.msgline(t.settings.arxivReadonly),
     ),
-    block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoWrap)),
+    block(ui, t.settings.blockWindow, sourceNumbers, hintRow(t.settings.mailto, mailtoWrap, t.settings.mailtoHint)),
     block(ui, t.settings.blockAbstract, abstractBox.el, bareBox.el, ui.msgline(t.settings.abstractHint)),
     block(ui, t.settings.blockDownload, fieldRow(ui, t.settings.downloadDir, dirBar)),
     block(ui, t.settings.blockOpenAlex, keyRow, keyState, ui.msgline(t.settings.openAlexHint)),
@@ -998,7 +1012,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
     return value === '' ? 0 : new Date(`${value}T23:59:59`).getTime();
   };
   const form = () => ({
-    checkMinutes: Number(checkInput.value),
     pushMode: mode,
     pushTimes: uniqSorted(pushTimesEditor.values()),
     minIntervalMinutes: Number(minGapInput.value),
@@ -1018,7 +1031,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
   const snapshotOf = (cfg: Cfg, card: 'cadence' | 'sources'): unknown => {
     if (card === 'cadence') {
-      return { checkMinutes: cfg.checkMinutes, pushMode: cfg.pushMode, pushTimes: cfg.pushTimes, minIntervalMinutes: cfg.minIntervalMinutes, dailyCap: cfg.dailyCap, pushDays: cfg.pushDays, pausedUntil: cfg.pausedUntil };
+      return { pushMode: cfg.pushMode, pushTimes: cfg.pushTimes, minIntervalMinutes: cfg.minIntervalMinutes, dailyCap: cfg.dailyCap, pushDays: cfg.pushDays, pausedUntil: cfg.pausedUntil };
     }
     if (card === 'sources') {
       return { keywords: cfg.keywords, arxivCats: cfg.arxivCats, windowDays: cfg.windowDays, rowsPerJournal: cfg.rowsPerJournal, mailto: cfg.mailto, downloadDir: cfg.downloadDir };
@@ -1064,7 +1077,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
     const setNum = (input: HTMLInputElement, value: number): void => {
       if (document.activeElement !== input) input.value = String(value);
     };
-    setNum(checkInput, c.checkMinutes);
     setNum(capInput, c.dailyCap);
     setNum(minGapInput, c.minIntervalMinutes);
     setMode(c.pushMode);
