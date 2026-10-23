@@ -25,11 +25,11 @@ node scripts/sync-extension-to-app.mjs                # 默认目标目录 D:\So
 `node_modules`）复制到 `<应用>\data\extensions\node_modules\<包名>`；在
 `<应用>\data\extensions\package.json` 的 `dependencies` 中登记该包名。框架按 `dependencies` 中的包名到
 `node_modules` 下查找扩展，两处须同时具备，否则扩展不会被加载。当前登记两个包：
-`cortico-world-quota`（用量额度）与 `cortico-world-interest-push`（兴趣推送）。
+`cortico-world-quota`（用量额度）与 `cortico-world-interest-push`（论文推送）。
 
-安装完成后，通过托盘菜单重启桌宠，将控制台左栏切换至高级模式，WORLD 分组下即出现「用量额度」与「兴趣推送」。
+安装完成后，通过托盘菜单重启桌宠，将控制台左栏切换至高级模式，WORLD 分组下即出现「用量额度」与「论文推送」。
 
-启用「兴趣推送」：World 的默认 `enabled` 为 false，需在 `<应用>\data\home\companion\config.json` 的
+启用「论文推送」：World 的默认 `enabled` 为 false，需在 `<应用>\data\home\companion\config.json` 的
 `worlds` 里加上 `"interest-push": { "enabled": true }`，或在控制台的 World 总览里启用；其余字段由扩展的
 默认值补齐（28 家期刊、46 条术语、6 条关键词）。
 

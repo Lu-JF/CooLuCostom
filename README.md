@@ -5,7 +5,7 @@ Coopanion 桌宠的两个扩展，均以 Cortico World 包形式提供，不修�
 | 扩展 | 包名 | World id | 控制台显示名 | 功能 |
 |---|---|---|---|---|
 | 用量额度 | `cortico-world-quota` | `quota` | 用量额度 | 套餐额度、滚动窗口与本机 Hermes 用量，越阈值时由桌宠提醒 |
-| 兴趣推送 | `cortico-world-interest-push` | `interest-push` | 兴趣推送 | 按节奏抓取研究方向的论文，用气泡对话介绍，详情留在面板 |
+| 论文推送 | `cortico-world-interest-push` | `interest-push` | 论文推送 | 按节奏抓取研究方向的论文，用气泡对话介绍，详情留在面板 |
 
 两个包相互独立，数据目录、页签与提示词各自一套，可只装其中一个。
 
@@ -16,7 +16,7 @@ Coopanion 桌宠的两个扩展，均以 Cortico World 包形式提供，不修�
 node scripts/sync-extension-to-app.mjs      # 构建面板产物并复制两个扩展到安装目录
 ```
 
-重启桌宠，在控制台切换至高级模式，WORLD 分组下出现「用量额度」与「兴趣推送」。
+重启桌宠，在控制台切换至高级模式，WORLD 分组下出现「用量额度」与「论文推送」。
 
 ## 构建与测试
 
@@ -24,7 +24,7 @@ node scripts/sync-extension-to-app.mjs      # 构建面板产物并复制两个�
 cd extension                # 或 extension-interest-push
 npm install
 npm run typecheck
-npm test                    # 用量额度 88 项 / 兴趣推送 147 项
+npm test                    # 用量额度 88 项 / 论文推送 160 项
 npm run build
 ```
 
@@ -46,7 +46,7 @@ npm run build
 | 计划价目 | `commandcode.ai/docs/plans/<计划>`、`/docs/resources/pricing-limits`，缓存 12 小时 |
 | Hermes 用量 | 本机 `state.db` 的 `session_model_usage` 表，只读 |
 
-## 二、兴趣推送
+## 二、论文推送
 
 ### 页签
 

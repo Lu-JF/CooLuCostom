@@ -623,7 +623,7 @@ export class InterestPushWorld implements World {
   private itemEventText(item: NewsItem, review: ReviewState | null): string {
     const authors = item.authors.slice(0, 3).join('、') + (item.authors.length > 3 ? ' 等' : '');
     return [
-      '[研究] 订阅推送一条。请按「兴趣推送」的环境提示词开口：先用 pet_say 报「大肥鱼速评」的评价与星级，再讲论文，' +
+      '[研究] 订阅推送一条。请按「论文推送」的环境提示词开口：先用 pet_say 报「大肥鱼速评」的评价与星级，再讲论文，' +
         '最后用 pet_ask 给按钮；不要沉默。',
       review === null
         ? '速评：（这次没评出来，直接讲论文，不要编分数）'

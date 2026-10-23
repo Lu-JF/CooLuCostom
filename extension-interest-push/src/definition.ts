@@ -6,7 +6,7 @@ import { InterestPushWorld } from './world.ts';
 
 export const INTEREST_PUSH: WorldDefinition<InterestPushConfigSection> = {
   id: 'interest-push',
-  label: '兴趣推送',
+  label: '论文推送',
   defaults: () => ({
     ...INTEREST_PUSH_DEFAULTS,
     journals: DEFAULT_JOURNALS.map((j) => ({ ...j })),

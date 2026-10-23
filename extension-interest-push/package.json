@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-interest-push",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "private": true,
   "type": "module",
   "keywords": [
@@ -10,7 +10,7 @@
   "cortico": {
     "kind": "world",
     "api": 5,
-    "displayName": "兴趣推送",
+    "displayName": "论文推送",
     "consoleClient": "dist/console.js",
     "consoleStyle": "dist/console.css"
   },

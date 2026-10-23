@@ -162,7 +162,7 @@ export interface InterestText {
 }
 
 const zh: InterestText = {
-  label: '兴趣推送',
+  label: '论文推送',
   panel: {
     listTitle: '列表',
     listDesc: '最近抓到的论文；点一条看详情。',

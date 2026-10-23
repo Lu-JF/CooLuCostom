@@ -463,7 +463,7 @@ describe('控制台声明', () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     const decl = world.console('zh');
-    expect(decl.label).toBe('兴趣推送');
+    expect(decl.label).toBe('论文推送');
     // 详情排第一：使用者真正要看的是这一页。
     expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'records', 'settings']);
     expect(decl.promptDocs?.[0]?.role).toBe('envPrompt');

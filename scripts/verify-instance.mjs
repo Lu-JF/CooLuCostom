@@ -142,7 +142,7 @@ if (withAlerts && view?.quota?.ok) {
   check('提醒阈值已改回', true, `${before <= 5 ? 80 : before}%`);
 }
 
-// ---------------------------------------------------------------- 兴趣推送
+// ---------------------------------------------------------------- 论文推送
 
 const ipPage = (manifest.json?.providers ?? []).find((p) => p.id === 'world:interest-push');
 check(
