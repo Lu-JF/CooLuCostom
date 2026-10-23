@@ -2,6 +2,8 @@
 
 Cortico World 扩展：按研究关键词跟踪期刊与 arXiv，把新论文用桌宠气泡讲一遍，完整信息留在控制台。
 
+仓库：https://github.com/Lu-JF/CooLuCostom
+
 ## 功能
 
 - **四个页签**：推送、列表、兴趣记录、配置。

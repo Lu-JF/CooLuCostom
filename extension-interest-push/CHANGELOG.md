@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- 包简介附上项目仓库地址，并补齐 repository / homepage / bugs 字段。
+
 ## 0.9.2
 
 - 推送页提示「大肥鱼速评」与「翻译」会消耗 Token。
