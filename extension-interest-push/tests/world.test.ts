@@ -82,7 +82,7 @@ function makeWorld(options?: {
   const cfg: InterestPushConfigSection = {
     ...INTEREST_PUSH_DEFAULTS,
     keywords: ['bearing fault diagnosis'],
-    journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: '中科院一区 · JCR Q1', tierBasis: '2025 中科院分区表 · JCR 2024', group: 'A' }],
+    journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: '中科院一区 · JCR Q1', tierBasis: '2025 中科院分区表 · JCR 2024' }],
     glossary: ['bearing | 轴承', 'fault diagnosis | 故障诊断'],
     pushTimes: ['10:30'],
     quiet: ['22:30', '08:30'],
@@ -202,7 +202,7 @@ describe('推送与回执', () => {
     const cfg: InterestPushConfigSection = {
       ...INTEREST_PUSH_DEFAULTS,
       keywords: ['bearing fault diagnosis'],
-      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b', group: 'A' }],
+      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b' }],
       pushTimes: ['10:30'],
     };
     const world = new InterestPushWorld({
@@ -250,7 +250,7 @@ describe('推送与回执', () => {
     const cfg: InterestPushConfigSection = {
       ...INTEREST_PUSH_DEFAULTS,
       keywords: ['bearing fault diagnosis'],
-      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b', group: 'A' }],
+      journals: [{ label: 'Mechanical Systems and Signal Processing', issn: '0888-3270', tier: 't', tierBasis: 'b' }],
       pushTimes: ['10:30'],
     };
     const world = new InterestPushWorld({ cfg, timezone: 'Asia/Shanghai', dataDir, botDir, persist: (patch) => Object.assign(cfg, patch), fetchImpl: fake, now: () => FIXED });
@@ -300,7 +300,7 @@ describe('补到的摘要会写回已有条目', () => {
     const cfg: InterestPushConfigSection = {
       ...INTEREST_PUSH_DEFAULTS,
       keywords: ['bearing fault diagnosis'],
-      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b', group: 'B' }],
+      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b' }],
       pushTimes: ['10:30'],
     };
     const world = new InterestPushWorld({ cfg, timezone: 'Asia/Shanghai', dataDir, botDir, persist: (patch) => Object.assign(cfg, patch), fetchImpl: fake, now: () => FIXED });
@@ -358,7 +358,7 @@ describe('只推有摘要的条目', () => {
     const cfg: InterestPushConfigSection = {
       ...INTEREST_PUSH_DEFAULTS,
       keywords: ['bearing fault diagnosis'],
-      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b', group: 'B' }],
+      journals: [{ label: 'Measurement', issn: '0263-2241', tier: 't', tierBasis: 'b' }],
       pushTimes: ['10:30'],
       requireAbstract: true,
     };
@@ -409,8 +409,7 @@ describe('配置保存', () => {
         pushDays: ['9'],
         maxRounds: 9,
         keywords: 'bearing\n\ngearbox ',
-        journals: [{ label: 'Measurement', issn: '0263-2241', tier: 'JCR Q1', tierBasis: 'x', group: 'B' }, { label: '', issn: 'x' }],
-        glossary: 'bearing | 轴承\n',
+
         arxivCats: 'eess.SP, ',
         windowDays: 0,
         rowsPerJournal: 9999,
@@ -426,8 +425,9 @@ describe('配置保存', () => {
     expect(cfg.maxRounds).toBe(5);
     expect(cfg.pushDays).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(cfg.keywords).toEqual(['bearing', 'gearbox']);
+    // 期刊与术语表只由 add/remove 方法改，保存配置不再覆盖它们。
     expect(cfg.journals).toHaveLength(1);
-    expect(cfg.journals[0]!.label).toBe('Measurement');
+    expect(cfg.journals[0]!.label).toContain('Mechanical Systems');
     expect(cfg.windowDays).toBe(1);
     expect(cfg.rowsPerJournal).toBe(200);
     expect(cfg.journalDelayDays).toBe(120);
@@ -646,7 +646,7 @@ describe('配置生效与缓存收敛', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'ip-snap-'));
     mkdirSync(join(dataDir, 'news'), { recursive: true });
     const journals = Array.from({ length: 6 }, (_, i) => ({
-      label: `Journal ${i}`, issn: `0000-000${i}`, tier: 'Q1', tierBasis: 'b', group: 'A',
+      label: `Journal ${i}`, issn: `0000-000${i}`, tier: 'Q1', tierBasis: 'b',
     }));
     writeFileSync(
       join(dataDir, 'news', 'config-snapshot.json'),

@@ -15,6 +15,7 @@ import type { Language } from 'cortico/core/language.ts';
 import type { World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import type { InterestPushConfigSection, JournalEntry } from './config.ts';
+import { lookupJournal, normalizeIssn, probeLatest, resolveTier } from './journal.ts';
 import {
   fetchHfDaily,
   fetchJournal,
@@ -118,6 +119,8 @@ export class InterestPushWorld implements World {
   private activeId: string | null = null;
   /** 每次推送或抓取合并后自增，面板据此判断是否需要重画。 */
   private revision = 0;
+  /** 上一次「检测全部期刊」的结果，只放内存。 */
+  private journalTest: InterestPushView['journalTest'] = { at: null, ok: 0, total: 0, results: [] };
   private translations = new Map<string, TranslationState>();
   private inflight: Promise<void> | null = null;
   private lastError: string | null = null;
@@ -128,6 +131,7 @@ export class InterestPushWorld implements World {
     this.activeId = this.state.activeId ?? null;
     this.items = this.loadItems();
     this.migrateItems();
+    this.fixJournalIssns();
     this.records = this.loadRecords();
   }
 
@@ -692,6 +696,90 @@ export class InterestPushWorld implements World {
         this.log('已保存 OpenAlex 密钥');
         return { ok: true, reason: null, view: this.view(language) };
       }
+      if (method === 'addJournal') {
+        const issn = normalizeIssn(String(args[0] ?? ''));
+        if (issn === null) return { ok: false, reason: t.settings.issnBad, view: this.view(language) };
+        if (this.opts.cfg.journals.some((j) => j.issn === issn)) {
+          return { ok: false, reason: t.settings.journalExists(issn), view: this.view(language) };
+        }
+        const deps = this.fetchDeps();
+        const meta = await lookupJournal(issn, deps);
+        if (meta === null) return { ok: false, reason: t.settings.journalMissing(issn), view: this.view(language) };
+        // 保存即试抓一篇：抓不到就不入库，免得列表里躺着一家永远没有结果的刊。
+        const sample = await probeLatest(issn, deps);
+        if (sample === null) {
+          return { ok: false, reason: t.settings.journalNoPapers(meta.title), view: this.view(language) };
+        }
+        const tier = await resolveTier(issn, deps);
+        const entry = { label: meta.title, issn, tier: tier.tier, tierBasis: tier.tierBasis };
+        const journals = [...this.opts.cfg.journals, entry];
+        this.opts.persist({ journals });
+        this.opts.cfg.journals = journals;
+        this.writeConfigSnapshot();
+        this.log(`新增期刊 ${meta.title}（${issn}），试抓成功：${sample.title.slice(0, 40)}`);
+        return { ok: true, reason: t.settings.journalAdded(meta.title, sample.title), view: this.view(language) };
+      }
+      if (method === 'removeJournal') {
+        const issn = normalizeIssn(String(args[0] ?? '')) ?? String(args[0] ?? '').trim();
+        const journals = this.opts.cfg.journals.filter((j) => j.issn !== issn);
+        if (journals.length === this.opts.cfg.journals.length) {
+          return { ok: false, reason: t.settings.journalUnknown(issn), view: this.view(language) };
+        }
+        this.opts.persist({ journals });
+        this.opts.cfg.journals = journals;
+        this.journalTest = {
+          ...this.journalTest,
+          results: this.journalTest.results.filter((r) => r.issn !== issn),
+          total: journals.length,
+          ok: this.journalTest.results.filter((r) => r.issn !== issn && r.ok).length,
+        };
+        this.writeConfigSnapshot();
+        return { ok: true, reason: null, view: this.view(language) };
+      }
+      if (method === 'testJournals') {
+        const deps = this.fetchDeps();
+        const journals = [...this.opts.cfg.journals];
+        const results: Array<{ issn: string; label: string; ok: boolean; reason: string }> = [];
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        // 顺序发、每条之间留一点间隔：Crossref 对突发请求限流，并发的「抓不到」是假失败。
+        for (const j of journals) {
+          const sample = await probeLatest(j.issn, deps);
+          results.push({
+            issn: j.issn,
+            label: j.label,
+            ok: sample !== null,
+            reason: sample === null ? t.settings.journalNoPapers(j.label) : sample.title,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        this.journalTest = { at: Date.now(), ok: results.filter((r) => r.ok).length, total: results.length, results };
+        this.log(`期刊检测：${this.journalTest.ok}/${this.journalTest.total} 可抓取`);
+        return { ok: true, reason: t.settings.journalTestDone(this.journalTest.ok, this.journalTest.total), view: this.view(language) };
+      }
+      if (method === 'addTerm') {
+        const line = String(args[0] ?? '').replace(/\s*\|\s*/g, ' | ').trim();
+        const [en, zh] = line.split(' | ');
+        if (!en || !zh) return { ok: false, reason: t.settings.termBad, view: this.view(language) };
+        if (this.opts.cfg.glossary.includes(line)) {
+          return { ok: false, reason: t.settings.termExists, view: this.view(language) };
+        }
+        const glossary = [...this.opts.cfg.glossary, line];
+        this.opts.persist({ glossary });
+        this.opts.cfg.glossary = glossary;
+        this.writeConfigSnapshot();
+        return { ok: true, reason: null, view: this.view(language) };
+      }
+      if (method === 'removeTerm') {
+        const line = String(args[0] ?? '').trim();
+        const glossary = this.opts.cfg.glossary.filter((x) => x !== line);
+        if (glossary.length === this.opts.cfg.glossary.length) {
+          return { ok: false, reason: t.settings.termUnknown, view: this.view(language) };
+        }
+        this.opts.persist({ glossary });
+        this.opts.cfg.glossary = glossary;
+        this.writeConfigSnapshot();
+        return { ok: true, reason: null, view: this.view(language) };
+      }
       if (method === 'review') {
         // 三个面板都能叫：列表里点「速评」时把那条传进来，推送页不传就是当前这篇。
         const id = String(args[0] ?? '').trim();
@@ -855,6 +943,7 @@ export class InterestPushWorld implements World {
       })),
       active,
       revision: this.revision,
+      journalTest: this.journalTest,
       translation: active ? (this.translations.get(active.id) ?? null) : null,
       review: active ? this.reviewStateOf(active.id) : null,
       lastError: this.lastError,
@@ -982,17 +1071,7 @@ export class InterestPushWorld implements World {
         .map((v) => String(v).trim())
         .filter((v) => v !== '')
         .slice(0, max);
-    const journals: JournalEntry[] = (Array.isArray(raw.journals) ? raw.journals : cfg.journals)
-      .map((j) => (j ?? {}) as Record<string, unknown>)
-      .map((j) => ({
-        label: String(j.label ?? '').trim(),
-        issn: String(j.issn ?? '').trim(),
-        tier: String(j.tier ?? '').trim(),
-        tierBasis: String(j.tierBasis ?? '').trim(),
-        group: String(j.group ?? '').trim() || 'X',
-      }))
-      .filter((j) => j.label !== '' && j.issn !== '')
-      .slice(0, 200);
+
     // 空数组是合法的（使用者就是要清空）；只有「键都没给」才保持原样。
     const days = (Array.isArray(raw.pushDays) ? raw.pushDays : [])
       .map((v) => Math.round(Number(v)))
@@ -1008,8 +1087,7 @@ export class InterestPushWorld implements World {
       maxRounds: num(raw.maxRounds, 1, 5, cfg.maxRounds),
       pausedUntil: Math.max(0, Math.round(Number(raw.pausedUntil ?? 0)) || 0),
       keywords: raw.keywords === undefined ? cfg.keywords : lines(raw.keywords, 30),
-      journals,
-      glossary: raw.glossary === undefined ? cfg.glossary : lines(raw.glossary, 400),
+      // 期刊与术语表都只由 add/remove 方法改，面板的保存不再覆盖它们。
       arxivCats: raw.arxivCats === undefined ? cfg.arxivCats : (Array.isArray(raw.arxivCats) ? raw.arxivCats : String(raw.arxivCats).split(','))
         .map((v) => String(v).trim())
         .filter((v) => v !== '')
@@ -1132,6 +1210,23 @@ export class InterestPushWorld implements World {
       const p = parseTime(text);
       return p !== null && inside(p.h * 60 + p.m);
     });
+  }
+
+  /** 早期默认表把 Structural Health Monitoring 的 ISSN 写成了 1477-9217，读到就改回来。 */
+  private fixJournalIssns(): void {
+    const fixes: Record<string, string> = { '1477-9217': '1475-9217' };
+    let changed = false;
+    for (const j of this.opts.cfg.journals) {
+      const right = fixes[j.issn];
+      if (right !== undefined) {
+        j.issn = right;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.opts.persist({ journals: this.opts.cfg.journals });
+      this.log('已修正 Structural Health Monitoring 的 ISSN');
+    }
   }
 
   /** 旧条目没有 venue：期刊来源的补上刊名，其余按预印本处理。只写一次。 */

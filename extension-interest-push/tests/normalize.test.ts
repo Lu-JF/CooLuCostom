@@ -44,7 +44,7 @@ describe('DEFAULT_JOURNALS', () => {
     expect(DEFAULT_JOURNALS).toHaveLength(28);
     expect(new Set(DEFAULT_JOURNALS.map((j) => j.issn)).size).toBe(28);
     expect(new Set(DEFAULT_JOURNALS.map((j) => j.tierBasis))).toEqual(new Set(['2025 中科院分区表 · JCR 2024']));
-    expect(DEFAULT_JOURNALS.every((j) => ['A', 'B', 'C', 'D'].includes(j.group))).toBe(true);
+    expect(DEFAULT_JOURNALS.every((j) => j.tier !== '' && j.label !== '')).toBe(true);
   });
 });
 

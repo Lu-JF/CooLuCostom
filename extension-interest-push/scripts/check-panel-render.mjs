@@ -285,17 +285,23 @@ try {
     const text = document.body.textContent ?? '';
     const inputs = [...document.querySelectorAll('input')];
     const rows = [...document.querySelectorAll('.ip-gridbody .ip-jrow')];
-    const journalRows = rows.filter((r) => r.querySelectorAll('input').length === 4);
-    const termRows = rows.filter((r) => r.querySelectorAll('input').length === 2);
+    // 期刊与术语表现在只读：行里没有输入框，靠所在卡片区分。
+    const gridOf = (title) => [...document.querySelectorAll('.sheet')].find((x) => (x.querySelector('h3')?.textContent ?? '').includes(title));
+    const journalGrid = gridOf('期刊集合') ?? gridOf('Journals');
+    const termGrid = gridOf('翻译术语表') ?? gridOf('Glossary');
+    const journalRows = [...(journalGrid?.querySelectorAll('.ip-gridbody .ip-jrow') ?? [])];
+    const termRows = [...(termGrid?.querySelectorAll('.ip-gridbody .ip-jrow') ?? [])];
     const weekButtons = [...document.querySelectorAll('.ip-week .btn')];
     return {
       text,
       inputs: inputs.length,
       selects: document.querySelectorAll('select').length,
       journalRows: journalRows.length,
-      journalCols: journalRows[0]?.querySelectorAll('input').length ?? 0,
+      journalCols: journalRows[0]?.querySelectorAll('span').length ?? 0,
+      journalInputs: document.querySelectorAll('.ip-grid .ip-jrow input').length,
       termRows: termRows.length,
-      termCols: termRows[0]?.querySelectorAll('input').length ?? 0,
+      termCols: termRows[0]?.querySelectorAll('span').length ?? 0,
+      termInputs: document.querySelectorAll('.ip-grid .ip-jrow input').length,
       tags: [...document.querySelectorAll('.ip-tag .ip-tagtext')].map((el) => el.textContent ?? ''),
       weekCount: weekButtons.length,
       weekOn: weekButtons.filter((b) => b.classList.contains('on')).length,
@@ -322,12 +328,14 @@ try {
   );
   check('时刻是「时 + 分」两个下拉，分钟能选到 15（不用打字）', cfg.timeHasQuarter && cfg.timeSelects >= 4, `${cfg.timeSelects} 个下拉，含 15 分：${cfg.timeHasQuarter}`);
   check('星期是 1-7 的按钮、默认全亮、单独一行', cfg.weekCount === 7 && cfg.weekOn === 7 && cfg.weekInOwnRow, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个，独占一行：${cfg.weekInOwnRow}`);
-  check('期刊表有表头且第四列已取消', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区标签/.test(cfg.journalHead) && /分组/.test(cfg.journalHead) && !cfg.hasTierBasisColumn, cfg.journalHead.trim().slice(0, 40));
-  check('期刊逐行可编辑（4 格）', cfg.journalRows >= 20 && cfg.journalCols === 4, `${cfg.journalRows} 行 × ${cfg.journalCols} 格`);
-  check('术语表按行增删（英文 / 中文两格），且标签里没有「每行」说明', cfg.termRows >= 30 && cfg.termCols === 2 && !cfg.hasPerLineHint, `${cfg.termRows} 行 × ${cfg.termCols} 格`);
+  check('期刊表只有刊名 / ISSN / 分区三列', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区/.test(cfg.journalHead) && !/分组/.test(cfg.journalHead), cfg.journalHead.trim().slice(0, 40));
+  check('期刊只读：没有输入框，行数就是配置里的家数', cfg.journalRows >= 20 && cfg.journalInputs === 0, `${cfg.journalRows} 行 / 输入框 ${cfg.journalInputs} 个`);
+  check('期刊有按 ISSN 新增与检测全部', cfg.text.includes('增加期刊') && cfg.text.includes('检测全部期刊') && cfg.text.includes('ISSN'), '');
+  check('术语表只读，条目全是文本', cfg.termRows >= 30 && cfg.termInputs === 0, `${cfg.termRows} 行 / 输入框 ${cfg.termInputs} 个`);
+  check('术语表用「增加词条」新增', cfg.text.includes('增加词条'), '');
   check('有「只推送有摘要的条目」开关', cfg.text.includes('只推送有摘要的条目'), '');
   check('有「期刊延迟天数」字段', cfg.text.includes('期刊延迟天数'), '');
-  check('每组各有自己的保存按钮', cfg.saveButtons >= 4 && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
+  check('节奏与数据源各有一个保存按钮', cfg.text.includes('保存推送节奏') && cfg.text.includes('保存数据源') && !cfg.hasStepHint, `${cfg.saveButtons} 个`);
   check('有「重新爬取一次」与「立刻推一条」', cfg.text.includes('重新爬取一次') && cfg.pushNow, '');
   check('两个编辑表格完全展开、没有滑动条', !cfg.gridClipped, cfg.gridClipped ? '仍有裁剪或滚动' : '');
   check('下载目录带本机选择器', cfg.pickPath >= 1, `${cfg.pickPath} 个`);

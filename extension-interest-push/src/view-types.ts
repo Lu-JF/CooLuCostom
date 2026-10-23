@@ -93,7 +93,7 @@ export interface InterestPushView {
     maxRounds: number;
     pausedUntil: number;
     keywords: string[];
-    journals: Array<{ label: string; issn: string; tier: string; tierBasis: string; group: string }>;
+    journals: Array<{ label: string; issn: string; tier: string; tierBasis: string }>;
     glossary: string[];
     arxivCats: string[];
     windowDays: number;
@@ -107,6 +107,13 @@ export interface InterestPushView {
     openAlexKeySet: boolean;
     /** 落在静默时段里的推送时刻（配置页据此提示）。 */
     quietConflicts: string[];
+  };
+  /** 上一次「检测全部期刊」的结果。 */
+  journalTest: {
+    at: number | null;
+    ok: number;
+    total: number;
+    results: Array<{ issn: string; label: string; ok: boolean; reason: string }>;
   };
   /** 调度状态摘要，配置页显示。 */
   schedule: {

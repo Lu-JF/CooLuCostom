@@ -14,8 +14,6 @@ export interface JournalEntry {
   tier: string;
   /** 分区依据（哪一年的表），提醒读者标签会过时。 */
   tierBasis: string;
-  /** 分组：A 旋转机械与健康管理 / B 工业电子与测量 / C 制造与工业信息 / D 智能算法与数据驱动 / X 自定义。 */
-  group: string;
 }
 
 export interface InterestPushConfigSection {

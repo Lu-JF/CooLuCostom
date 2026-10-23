@@ -30,7 +30,7 @@ export type ConditionalResult =
   | { notModified: false; text: string; etag?: string; lastModified?: string };
 
 /** 取实际使用的 fetch。 */
-function resolveFetch(deps: FetchDeps): typeof fetch {
+export function resolveFetch(deps: FetchDeps): typeof fetch {
   return deps.fetchImpl ?? fetch;
 }
 

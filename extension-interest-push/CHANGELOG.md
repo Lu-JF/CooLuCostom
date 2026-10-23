@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.4
+
+- 期刊集合改为只读：按 ISSN 新增，自动识别刊名与分区，保存时试抓一篇，另有「检测全部期刊」。
+- 期刊表取消分组列；arXiv 分类只读；翻译术语表改为只读列表 + 增加词条 + 删除。
+- 修正 Structural Health Monitoring 的 ISSN（1477-9217 → 1475-9217）。
+
 ## 0.9.3
 
 - 包简介附上项目仓库地址，并补齐 repository / homepage / bugs 字段。

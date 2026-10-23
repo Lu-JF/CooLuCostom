@@ -790,13 +790,11 @@ function mountSettings(ctx: ConsolePanelContext): void {
     },
     signal: ctx.signal,
   });
-  const catsEditor = tagEditor(ui, t, {
-    add: () => {
-      const input = ui.input({ placeholder: 'eess.SP' });
-      return { el: input, value: () => input.value, clear: () => { input.value = ''; } };
-    },
-    signal: ctx.signal,
-  });
+  const catsView = ui.h('div', 'ip-tags');
+  const fillCats = (cats: string[]): void => {
+    catsView.replaceChildren();
+    for (const cat of cats) catsView.appendChild(ui.chip(cat, 'plain'));
+  };
   const windowInput = numberInput(ui, '30');
   const rowsInput = numberInput(ui, '50');
   const delayInput = numberInput(ui, '14', '4.5em');
@@ -851,7 +849,8 @@ function mountSettings(ctx: ConsolePanelContext): void {
       fieldRow(ui, t.settings.keywords, ui.h('div')),
       keywordsEditor.el,
       fieldRow(ui, t.settings.arxivCats, ui.h('div')),
-      catsEditor.el,
+      catsView,
+      ui.msgline(t.settings.arxivReadonly),
     ),
     block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoWrap)),
     block(ui, t.settings.blockAbstract, abstractBox.el, bareBox.el, ui.msgline(t.settings.abstractHint)),
@@ -860,46 +859,70 @@ function mountSettings(ctx: ConsolePanelContext): void {
     sourcesFoot,
   );
 
-  // ---- 期刊集合：四列 + 表头 + 说明
+  // ---- 期刊集合：只展示，新增靠 ISSN，删除靠 ×，检测靠按钮
   const journals = ui.sheet({ title: t.settings.journals });
   const journalGrid = ui.h('div', 'ip-grid');
   const journalHead = ui.h('div', 'ip-jrow ip-gridhead');
-  for (const label of [t.settings.colLabel, t.settings.colIssn, t.settings.colTier, t.settings.colGroup, '']) {
+  for (const label of [t.settings.colLabel, t.settings.colIssn, t.settings.colTier, '']) {
     journalHead.appendChild(ui.h('span', 'ip-gridcell', label));
   }
   const journalRowsHost = ui.h('div', 'ip-gridbody');
   journalGrid.append(journalHead, journalRowsHost);
-  const journalRows: Array<{ label: HTMLInputElement; issn: HTMLInputElement; tier: HTMLInputElement; group: HTMLInputElement; el: HTMLElement }> = [];
-  const addJournalRow = (init?: { label?: string; issn?: string; tier?: string; group?: string }): void => {
-    const el = ui.h('div', 'ip-jrow');
-    const label = ui.input({ placeholder: t.settings.colLabel });
-    const issn = ui.input({ placeholder: '0888-3270' });
-    const tier = ui.input({ placeholder: '中科院一区 · JCR Q1' });
-    const group = ui.input({ placeholder: 'A' });
-    label.value = init?.label ?? '';
-    issn.value = init?.issn ?? '';
-    tier.value = init?.tier ?? '';
-    group.value = init?.group ?? '';
-    const del = ui.button('×', {
-      size: 'sm',
-      onClick: () => {
-        el.remove();
-        const at = journalRows.findIndex((r) => r.el === el);
-        if (at >= 0) journalRows.splice(at, 1);
-      },
-    });
-    del.classList.add('ip-del');
-    del.title = t.settings.remove;
-    el.append(label, issn, tier, group, del);
-    journalRowsHost.appendChild(el);
-    journalRows.push({ label, issn, tier, group, el });
-  };
-  const journalFoot = ui.rowbar();
-  const journalsSave = ui.button(t.settings.saveSectionOf(t.settings.journals), { variant: 'primary', size: 'sm', onClick: () => void saveCard('journals') });
-  journalFoot.append(ui.button(t.settings.addJournal, { size: 'sm', onClick: () => addJournalRow() }), journalsSave);
-  journals.body.append(journalGrid, ui.msgline(t.settings.journalNote), journalFoot);
 
-  // ---- 翻译术语表：两列 + 表头
+  const journalStatus = makeStatus(ui);
+  const issnInput = ui.input({ placeholder: '0888-3270' });
+  issnInput.classList.add('ip-issninput');
+  const addJournalBtn = ui.button(t.settings.addJournal, {
+    size: 'sm',
+    variant: 'primary',
+    onClick: () => {
+      void (async () => {
+        const value = issnInput.value.trim();
+        if (value === '') return;
+        addJournalBtn.disabled = true;
+        journalStatus.set(t.settings.checking, 'busy');
+        try {
+          const out = await ctx.invoke<InvokeResult>('addJournal', [value]);
+          view = out.view;
+          if (out.ok) {
+            issnInput.value = '';
+            journalStatus.set(String(out.reason ?? ''), 'ok');
+          } else {
+            journalStatus.set(String(out.reason ?? ''), 'bad');
+          }
+          render();
+        } catch (err) {
+          journalStatus.set(errText(err), 'bad');
+        } finally {
+          addJournalBtn.disabled = false;
+        }
+      })();
+    },
+  });
+  const testJournalsBtn = ui.button(t.settings.testJournals, {
+    size: 'sm',
+    onClick: () => {
+      void (async () => {
+        testJournalsBtn.disabled = true;
+        journalStatus.set(t.settings.checking, 'busy');
+        try {
+          const out = await ctx.invoke<InvokeResult>('testJournals');
+          view = out.view;
+          journalStatus.set(String(out.reason ?? ''), out.ok ? 'ok' : 'bad');
+          render();
+        } catch (err) {
+          journalStatus.set(errText(err), 'bad');
+        } finally {
+          testJournalsBtn.disabled = false;
+        }
+      })();
+    },
+  });
+  const journalFoot = ui.rowbar();
+  journalFoot.append(issnInput, addJournalBtn, testJournalsBtn, journalStatus.el);
+  journals.body.append(journalGrid, ui.msgline(t.settings.journalNote), ui.msgline(t.settings.addJournalHint), journalFoot);
+
+  // ---- 翻译术语表：只展示 + 增加词条 + ×
   const glossary = ui.sheet({ title: t.settings.glossary });
   const termGrid = ui.h('div', 'ip-grid');
   const termHead = ui.h('div', 'ip-jrow ip-gridhead ip-grow');
@@ -908,30 +931,39 @@ function mountSettings(ctx: ConsolePanelContext): void {
   }
   const termRowsHost = ui.h('div', 'ip-gridbody');
   termGrid.append(termHead, termRowsHost);
-  const termRows: Array<{ en: HTMLInputElement; zh: HTMLInputElement; el: HTMLElement }> = [];
-  const addTermRow = (init?: { en?: string; zh?: string }): void => {
-    const el = ui.h('div', 'ip-jrow ip-grow');
-    const en = ui.input({ placeholder: 'bearing' });
-    const zh = ui.input({ placeholder: '轴承' });
-    en.value = init?.en ?? '';
-    zh.value = init?.zh ?? '';
-    const del = ui.button('×', {
-      size: 'sm',
-      onClick: () => {
-        el.remove();
-        const at = termRows.findIndex((r) => r.el === el);
-        if (at >= 0) termRows.splice(at, 1);
-      },
-    });
-    del.classList.add('ip-del');
-    del.title = t.settings.remove;
-    el.append(en, zh, del);
-    termRowsHost.appendChild(el);
-    termRows.push({ en, zh, el });
-  };
+
+  const termStatus = makeStatus(ui);
+  const termEn = ui.input({ placeholder: 'bearing' });
+  const termZh = ui.input({ placeholder: '轴承' });
+  const addTermBtn = ui.button(t.settings.addTerm, {
+    size: 'sm',
+    onClick: () => {
+      void (async () => {
+        const en = termEn.value.trim();
+        const zh = termZh.value.trim();
+        if (en === '' || zh === '') return;
+        addTermBtn.disabled = true;
+        try {
+          const out = await ctx.invoke<InvokeResult>('addTerm', [`${en} | ${zh}`]);
+          view = out.view;
+          if (out.ok) {
+            termEn.value = '';
+            termZh.value = '';
+            termStatus.set('', '');
+          } else {
+            termStatus.set(String(out.reason ?? ''), 'bad');
+          }
+          render();
+        } catch (err) {
+          termStatus.set(errText(err), 'bad');
+        } finally {
+          addTermBtn.disabled = false;
+        }
+      })();
+    },
+  });
   const termFoot = ui.rowbar();
-  const glossarySave = ui.button(t.settings.saveSectionOf(t.settings.glossary), { variant: 'primary', size: 'sm', onClick: () => void saveCard('glossary') });
-  termFoot.append(ui.button(t.settings.addTerm, { size: 'sm', onClick: () => addTermRow() }), glossarySave);
+  termFoot.append(termEn, termZh, addTermBtn, termStatus.el);
   glossary.body.append(termGrid, termFoot);
 
   ctx.root.append(top, ui.msgline(t.settings.checkNowHint), cadence.el, sources.el, journals.el, glossary.el);
@@ -950,7 +982,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     pushDays: week.values(),
     pausedUntil: pausedUntilFromForm(),
     keywords: uniqSorted(keywordsEditor.values()),
-    arxivCats: uniqSorted(catsEditor.values()),
+
     windowDays: Number(windowInput.value),
     rowsPerJournal: Number(rowsInput.value),
     journalDelayDays: Number(delayInput.value),
@@ -958,26 +990,18 @@ function mountSettings(ctx: ConsolePanelContext): void {
     downloadDir: dirInput.value.trim(),
     requireAbstract: abstractBox.checked,
     allowNoAbstractPush: bareBox.checked,
-    journals: journalRows
-      .map((r) => ({ label: r.label.value.trim(), issn: r.issn.value.trim(), tier: r.tier.value.trim(), group: r.group.value.trim() }))
-      .filter((j) => j.label !== '' && j.issn !== ''),
-    glossary: uniqSorted(termRows.map((r) => `${r.en.value.trim()} | ${r.zh.value.trim()}`)).filter((line) => !/^\|\s*$/.test(line)),
   });
 
-  const snapshotOf = (cfg: Cfg, card: 'cadence' | 'sources' | 'journals' | 'glossary'): unknown => {
+  const snapshotOf = (cfg: Cfg, card: 'cadence' | 'sources'): unknown => {
     if (card === 'cadence') {
       return { checkMinutes: cfg.checkMinutes, dailyCap: cfg.dailyCap, maxRounds: cfg.maxRounds, pushTimes: cfg.pushTimes, quiet: cfg.quiet, pushDays: cfg.pushDays, pausedUntil: cfg.pausedUntil };
     }
     if (card === 'sources') {
       return { keywords: cfg.keywords, arxivCats: cfg.arxivCats, windowDays: cfg.windowDays, rowsPerJournal: cfg.rowsPerJournal, mailto: cfg.mailto, downloadDir: cfg.downloadDir };
     }
-    if (card === 'journals') {
-      return cfg.journals.map((j) => ({ label: j.label, issn: j.issn, tier: j.tier, group: j.group }));
-    }
-    return cfg.glossary;
   };
 
-  async function saveCard(card: 'cadence' | 'sources' | 'journals' | 'glossary'): Promise<void> {
+  async function saveCard(card: 'cadence' | 'sources'): Promise<void> {
     const names: Record<string, string> = {
       cadence: t.settings.groupPush,
       sources: t.settings.groupSources,
@@ -1033,7 +1057,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     if (document.activeElement !== dirInput) dirInput.value = c.downloadDir;
     pushTimesEditor.setValues(c.pushTimes);
     keywordsEditor.setValues(c.keywords);
-    catsEditor.setValues(c.arxivCats);
+    fillCats(c.arxivCats);
     quietStart.set(c.quiet[0] ?? '22:30');
     quietEnd.set(c.quiet[1] ?? '08:30');
     week.setValues(c.pushDays);
@@ -1044,13 +1068,60 @@ function mountSettings(ctx: ConsolePanelContext): void {
     }
 
     journalRowsHost.replaceChildren();
-    journalRows.length = 0;
-    for (const j of c.journals) addJournalRow(j);
+    const results = new Map(v.journalTest.results.map((r) => [r.issn, r]));
+    for (const j of c.journals) {
+      const row = ui.h('div', 'ip-jrow');
+      row.append(ui.h('span', 'ip-gridcell', j.label), ui.h('span', 'ip-gridcell', j.issn), ui.h('span', 'ip-gridcell', j.tier));
+      const probe = results.get(j.issn);
+      const cell = ui.h('span', 'ip-gridcell');
+      if (probe !== undefined) cell.appendChild(ui.pill(probe.ok ? '✓' : '✗', probe.ok ? 'on' : 'plain'));
+      const del = ui.button('×', {
+        size: 'sm',
+        onClick: () => {
+          void (async () => {
+            try {
+              const out = await ctx.invoke<InvokeResult>('removeJournal', [j.issn]);
+              view = out.view;
+              render();
+              if (!out.ok) ui.toast(String(out.reason ?? ''), 'bad');
+            } catch (err) {
+              ui.toast(errText(err), 'bad');
+            }
+          })();
+        },
+      });
+      del.classList.add('ip-del');
+      del.title = t.settings.remove;
+      cell.appendChild(del);
+      row.appendChild(cell);
+      journalRowsHost.appendChild(row);
+    }
     termRowsHost.replaceChildren();
-    termRows.length = 0;
     for (const line of c.glossary) {
-      const [en, zh] = line.split('|').map((s) => s.trim());
-      addTermRow({ en: en ?? '', zh: zh ?? '' });
+      const [en = '', zh = ''] = line.split(' | ');
+      const row = ui.h('div', 'ip-jrow ip-grow');
+      row.append(ui.h('span', 'ip-gridcell', en), ui.h('span', 'ip-gridcell', zh));
+      const del = ui.button('×', {
+        size: 'sm',
+        onClick: () => {
+          void (async () => {
+            try {
+              const out = await ctx.invoke<InvokeResult>('removeTerm', [line]);
+              view = out.view;
+              render();
+              if (!out.ok) ui.toast(String(out.reason ?? ''), 'bad');
+            } catch (err) {
+              ui.toast(errText(err), 'bad');
+            }
+          })();
+        },
+      });
+      del.classList.add('ip-del');
+      del.title = t.settings.remove;
+      const cell = ui.h('span', 'ip-gridcell');
+      cell.appendChild(del);
+      row.appendChild(cell);
+      termRowsHost.appendChild(row);
     }
 
     note.textContent = [

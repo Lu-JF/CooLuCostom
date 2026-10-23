@@ -133,6 +133,19 @@ export interface InterestText {
     openAlexBad: string;
     glossary: string;
     addJournal: string;
+    addJournalHint: string;
+    testJournals: string;
+    issnBad: string;
+    journalExists: (issn: string) => string;
+    journalMissing: (issn: string) => string;
+    journalNoPapers: (label: string) => string;
+    journalAdded: (label: string, paper: string) => string;
+    journalUnknown: (issn: string) => string;
+    journalTestDone: (ok: number, total: number) => string;
+    termBad: string;
+    termExists: string;
+    termUnknown: string;
+    arxivReadonly: string;
     remove: string;
     groupTags: string;
     addTime: string;
@@ -149,7 +162,6 @@ export interface InterestText {
     colLabel: string;
     colIssn: string;
     colTier: string;
-    colGroup: string;
     colEnglish: string;
     colChinese: string;
     addTerm: string;
@@ -310,7 +322,20 @@ const zh: InterestText = {
     openAlexUnset: '未配置',
     openAlexBad: 'key 格式不对，应为 8–64 位字母、数字、下划线或连字符',
     glossary: '翻译术语表',
-    addJournal: '增加一行',
+    addJournal: '增加期刊',
+    addJournalHint: '填 8 位 ISSN 即可，刊名与分区自动识别；保存时会试抓一篇，抓不到不入库。',
+    testJournals: '检测全部期刊',
+    issnBad: 'ISSN 格式不对，应为 8 位，例如 0888-3270',
+    journalExists: (issn) => `这家刊已经在列表里（${issn}）`,
+    journalMissing: (issn) => `Crossref 没有 ${issn} 这家刊`,
+    journalNoPapers: (label) => `《${label}》暂时抓不到论文，检查 ISSN 是否正确`,
+    journalAdded: (label, paper) => `保存成功，成功抓到一篇《${label}》的论文：${paper}`,
+    journalUnknown: (issn) => `列表里没有 ${issn}`,
+    journalTestDone: (ok, total) => `检测完成：${ok}/${total} 家能抓到论文`,
+    termBad: '词条要写成「英文 | 中文」两段',
+    termExists: '这个词条已经在表里',
+    termUnknown: '表里没有这个词条',
+    arxivReadonly: '按关键词检索时不用分类，这一项仅在关键词为空时作为兜底，固定不可改。',
     remove: '删除',
     groupTags: '点右侧「✕」删掉，用下面的菜单或输入框增加',
     addTime: '增加时刻',
@@ -323,11 +348,10 @@ const zh: InterestText = {
     savedSection: (name) => `${name}已保存`,
     savedSectionAdjusted: (name) => `${name}已保存，个别数值按合法范围调整`,
     saveSectionFailed: (name) => `${name}未生效，请重试`,
-    journalNote: '分区标签参照 2025 中科院分区表与 JCR 2024（逐年变化，标签可直接改）；依据不在表格里编辑。',
+    journalNote: '分区标签参照 2025 中科院分区表与 JCR 2024；表里没有的刊按 Crossref 最早一篇判断，四年内创刊标「新锐期刊」，其余「未标注」。',
     colLabel: '刊名',
     colIssn: 'ISSN',
     colTier: '分区标签',
-    colGroup: '分组',
     colEnglish: '英文',
     colChinese: '中文',
     addTerm: '增加词条',
@@ -487,7 +511,20 @@ const en: InterestText = {
     openAlexUnset: 'Not configured',
     openAlexBad: 'Key must be 8-64 characters of letters, digits, underscore or hyphen',
     glossary: 'Translation glossary',
-    addJournal: 'Add row',
+    addJournal: 'Add journal',
+    addJournalHint: 'Enter the 8-digit ISSN; the title and quartile are filled in automatically. Saving fetches one paper as a check.',
+    testJournals: 'Test all journals',
+    issnBad: 'ISSN must be 8 digits, e.g. 0888-3270',
+    journalExists: (issn) => `${issn} is already in the list`,
+    journalMissing: (issn) => `Crossref has no journal with ISSN ${issn}`,
+    journalNoPapers: (label) => `No paper could be fetched for ${label}; check the ISSN`,
+    journalAdded: (label, paper) => `Saved. Fetched one paper from ${label}: ${paper}`,
+    journalUnknown: (issn) => `${issn} is not in the list`,
+    journalTestDone: (ok, total) => `Done: ${ok}/${total} journals return papers`,
+    termBad: 'Use "English | Chinese"',
+    termExists: 'Term already present',
+    termUnknown: 'Term not found',
+    arxivReadonly: 'Categories are only used when the keyword list is empty, and are fixed.',
     remove: 'Remove',
     groupTags: 'Click ✕ to remove; add with the menu or box below',
     addTime: 'Add time',
@@ -500,11 +537,10 @@ const en: InterestText = {
     savedSection: (name) => `${name} saved`,
     savedSectionAdjusted: (name) => `${name} saved with some values clamped`,
     saveSectionFailed: (name) => `${name} did not take effect, retry`,
-    journalNote: 'Tier labels follow the 2025 CAS list and JCR 2024; edit the label directly. The basis is not edited here.',
+    journalNote: 'Tiers follow the 2025 CAS list and JCR 2024. Unknown journals are labelled from their first Crossref record: within four years means Emerging, otherwise Unranked.',
     colLabel: 'Journal',
     colIssn: 'ISSN',
     colTier: 'Tier',
-    colGroup: 'Group',
     colEnglish: 'English',
     colChinese: 'Chinese',
     addTerm: 'Add term',
