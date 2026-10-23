@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-dailypaper",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "type": "module",
   "keywords": [
     "cortico-world",
@@ -47,10 +47,10 @@
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
   },
-  "description": "Cortico World：按研究关键词抓取期刊与 arXiv 论文，用桌宠气泡讲速评与要点，面板里看摘要、译文、机构与 DOI。仓库 https://github.com/Lu-JF/CooLuCostom",
+  "description": "按研究关键词抓取期刊与 arXiv 论文，用桌宠气泡讲速评与要点，面板里看摘要、译文、机构与 DOI。仓库 https://github.com/Lu-JF/CooLuCostom",
   "license": "MIT",
   "author": {
-    "name": "Jingfeng Lu"
+    "name": "LuJF"
   },
   "engines": {
     "node": ">=22"
