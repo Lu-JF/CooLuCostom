@@ -1,18 +1,35 @@
 {
   "name": "cortico-world-interest-push",
   "version": "0.8.4",
-  "private": true,
   "type": "module",
   "keywords": [
-    "cortico-world"
+    "cortico-world",
+    "cortico",
+    "papers",
+    "arxiv",
+    "crossref",
+    "literature",
+    "research"
   ],
   "main": "./src/index.ts",
   "cortico": {
     "kind": "world",
     "api": 5,
     "displayName": "论文推送",
+    "icon": "assets/icon.png",
+    "screenshots": [
+      "assets/shot-detail.png",
+      "assets/shot-list.png",
+      "assets/shot-settings.png"
+    ],
     "consoleClient": "dist/console.js",
-    "consoleStyle": "dist/console.css"
+    "consoleStyle": "dist/console.css",
+    "locales": {
+      "en": {
+        "displayName": "Paper Push",
+        "description": "Follow your research keywords across journals and arXiv. The pet introduces each paper with a quick review; the console shows abstract, translation, institution and DOI."
+      }
+    }
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit",
@@ -29,5 +46,21 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^2.1.9"
-  }
+  },
+  "description": "Cortico World：按研究关键词抓取期刊与 arXiv 论文，用桌宠气泡讲速评与要点，面板里看摘要、译文、机构与 DOI。",
+  "license": "MIT",
+  "author": {
+    "name": "Jingfeng Lu"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "src/**",
+    "dist/**",
+    "assets/**",
+    "describe.json",
+    "CHANGELOG.md"
+  ],
+  "homepage": "https://github.com/Lu-JF/CooLuCostom"
 }
