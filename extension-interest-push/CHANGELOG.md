@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- npm 包名改为 `cortico-world-dailypaper`。
+- 配置 → 数据源新增 OpenAlex 密钥输入，密钥写入部署 `.env`，不回显。
+
 ## 0.8.4
 
 - 扩展显示名改为「论文推送」。

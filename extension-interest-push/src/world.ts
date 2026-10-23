@@ -58,6 +58,8 @@ export interface InterestPushWorldOptions {
   persist: (patch: Partial<InterestPushConfigSection>) => void;
   /** 读框架的秘密存储（部署 .env）。 */
   secret?: (name: string) => string;
+  /** 写部署 .env（密钥只走这里，不进配置文件）。 */
+  storeSecret?: (name: string, value: string) => void;
   /** 测试注入：网络与时钟。 */
   fetchImpl?: typeof fetch;
   now?: () => number;
@@ -675,6 +677,21 @@ export class InterestPushWorld implements World {
         await this.run('manual');
         return { ok: true, reason: null, view: this.view(language) };
       }
+      if (method === 'setOpenAlexKey') {
+        // 密钥只写部署 .env，不进配置文件，也不回显。
+        const value = String(args[0] ?? '').trim();
+        // 留空表示不改动：框架的秘密存储不接受空值。
+        if (value === '') return { ok: true, reason: null, view: this.view(language) };
+        if (this.opts.storeSecret === undefined) {
+          return { ok: false, reason: t.errors.noSecretStore, view: this.view(language) };
+        }
+        if (!/^[A-Za-z0-9_-]{8,64}$/.test(value)) {
+          return { ok: false, reason: t.settings.openAlexBad, view: this.view(language) };
+        }
+        this.opts.storeSecret('OPENALEX_API_KEY', value);
+        this.log('已保存 OpenAlex 密钥');
+        return { ok: true, reason: null, view: this.view(language) };
+      }
       if (method === 'review') {
         // 三个面板都能叫：列表里点「速评」时把那条传进来，推送页不传就是当前这篇。
         const id = String(args[0] ?? '').trim();
@@ -813,6 +830,7 @@ export class InterestPushWorld implements World {
         downloadDir: cfg.downloadDir,
         requireAbstract: cfg.requireAbstract,
         allowNoAbstractPush: cfg.allowNoAbstractPush,
+        openAlexKeySet: (this.opts.secret?.('OPENALEX_API_KEY') ?? '') !== '',
         quietConflicts: this.quietConflicts(),
       },
       schedule: {

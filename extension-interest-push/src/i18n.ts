@@ -120,6 +120,14 @@ export interface InterestText {
     downloadDir: string;
     requireAbstract: string;
     allowNoAbstract: string;
+    blockOpenAlex: string;
+    openAlexKey: string;
+    openAlexHint: string;
+    openAlexPlaceholder: string;
+    openAlexSave: string;
+    openAlexSet: string;
+    openAlexUnset: string;
+    openAlexBad: string;
     glossary: string;
     addJournal: string;
     remove: string;
@@ -155,6 +163,7 @@ export interface InterestText {
     unknownMethod: (m: string) => string;
     noActive: string;
     noEndpoint: string;
+    noSecretStore: string;
     poolEmpty: (total: number, pushed: number, dismissed: number, left: number) => string;
     /** 池底空时提示去哪里打开兜底开关。 */
     poolEmptyHint: string;
@@ -281,6 +290,15 @@ const zh: InterestText = {
     downloadDir: '下载目录',
     requireAbstract: '只推送有摘要的条目（推荐）',
     allowNoAbstract: '没有可推条目时允许推缺摘要的（仅手动）',
+    blockOpenAlex: '摘要与机构的数据源密钥',
+    openAlexKey: 'OpenAlex 密钥',
+    openAlexHint:
+      '在 openalex.org 用邮箱免费申请，邮件里的链接点开即可拿到 key。配好后摘要与机构回填走你自己的额度，不再受共享额度的限制；不填也能用，只是每天可能被限流。',
+    openAlexPlaceholder: '粘贴 key 后保存；留空表示不改动',
+    openAlexSave: '保存密钥',
+    openAlexSet: '已配置',
+    openAlexUnset: '未配置',
+    openAlexBad: 'key 格式不对，应为 8–64 位字母、数字、下划线或连字符',
     glossary: '翻译术语表',
     addJournal: '增加一行',
     remove: '删除',
@@ -315,6 +333,7 @@ const zh: InterestText = {
     unknownMethod: (m) => `未实现的方法 ${m}`,
     noActive: '没有选中的条目',
     noEndpoint: '找不到可用的模型端点',
+    noSecretStore: '当前环境不支持写入密钥',
     poolEmpty: (total, pushed, dismissed, left) =>
       `没有可推的条目：共 ${total} 条，已推 ${pushed} 条，判为不感兴趣 ${dismissed} 条，其余 ${left} 条都缺摘要。`,
     poolEmptyHint: ' 可在「数据源」里打开「没有可推条目时允许推缺摘要的」，手动推送就会带上缺摘要的条目。',
@@ -441,6 +460,15 @@ const en: InterestText = {
     downloadDir: 'Download dir',
     requireAbstract: 'Only push items that have an abstract',
     allowNoAbstract: 'Allow items without an abstract when nothing else is left (manual only)',
+    blockOpenAlex: 'Data source key',
+    openAlexKey: 'OpenAlex key',
+    openAlexHint:
+      'Request one for free at openalex.org with your email; the key is in the confirmation mail. With a key, abstract and institution lookups use your own quota instead of the shared one. Without it the extension still works, but may be rate limited.',
+    openAlexPlaceholder: 'Paste a key and save; leave empty to keep the current one',
+    openAlexSave: 'Save key',
+    openAlexSet: 'Configured',
+    openAlexUnset: 'Not configured',
+    openAlexBad: 'Key must be 8-64 characters of letters, digits, underscore or hyphen',
     glossary: 'Translation glossary',
     addJournal: 'Add row',
     remove: 'Remove',
@@ -475,6 +503,7 @@ const en: InterestText = {
     unknownMethod: (m) => `method ${m} is not implemented`,
     noActive: 'no active item',
     noEndpoint: 'no usable model endpoint',
+    noSecretStore: 'this environment cannot store secrets',
     poolEmpty: (total, pushed, dismissed, left) =>
       `Nothing pushable: ${total} items, ${pushed} pushed, ${dismissed} dismissed, the remaining ${left} have no abstract.`,
     poolEmptyHint: ' Enable "allow items without an abstract" under Data sources to push one manually.',

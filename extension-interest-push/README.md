@@ -1,4 +1,4 @@
-# 论文推送（cortico-world-interest-push）
+# 论文推送（cortico-world-dailypaper）
 
 Cortico World 扩展：按研究关键词跟踪期刊与 arXiv，把新论文用桌宠气泡讲一遍，完整信息留在控制台。
 
@@ -16,10 +16,10 @@ Cortico World 扩展：按研究关键词跟踪期刊与 arXiv，把新论文用
 
 ## 安装
 
-在 Coopanion 控制台「扩展」页搜索 `cortico-world-interest-push`，或：
+在 Coopanion 控制台「扩展」页搜索 `cortico-world-dailypaper`，或：
 
 ```
-cd extensions && corepack pnpm add cortico-world-interest-push
+cd extensions && corepack pnpm add cortico-world-dailypaper
 ```
 
 重启进程后在「World 总览」启用。
@@ -35,10 +35,11 @@ cd extensions && corepack pnpm add cortico-world-interest-push
 | 期刊集合 | 刊名、ISSN、分区标签、分组 |
 | 翻译术语表 | 英文与中文对照 |
 
-可选环境变量（不写入配置文件）：
+OpenAlex 密钥在「配置 → 数据源 → 摘要与机构的数据源密钥」里填：在 openalex.org 用邮箱免费申请，
+邮件里的链接点开就能拿到 key。密钥只写入部署目录的 `.env`，不写配置文件、也不回显。
+不填也能用，只是摘要与机构回填会走共享额度，高峰时段可能被限流。
 
-- `OPENALEX_API_KEY`：OpenAlex 免费额度按出口 IP 共享，配置后摘要与机构回填更稳定。
-- `S2_API_KEY`：Semantic Scholar 同样可选。
+`S2_API_KEY` 仍只从环境变量读取，可选。
 
 ## 数据来源
 

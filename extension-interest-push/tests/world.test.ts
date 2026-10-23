@@ -74,6 +74,7 @@ function makeWorld(options?: {
   log?: CallLog;
   persist?: (p: Partial<InterestPushConfigSection>) => void;
   fetchImpl?: typeof fetch;
+  storeSecret?: (name: string, value: string) => void;
 }) {
   const dataDir = options?.dataDir ?? mkdtempSync(join(tmpdir(), 'ip-data-'));
   const botDir = options?.botDir ?? makeBotDir();
@@ -87,6 +88,7 @@ function makeWorld(options?: {
     quiet: ['22:30', '08:30'],
   };
   const patches: Array<Partial<InterestPushConfigSection>> = [];
+  const secrets = new Map<string, string>();
   const world = new InterestPushWorld({
     cfg,
     timezone: 'Asia/Shanghai',
@@ -98,6 +100,11 @@ function makeWorld(options?: {
       options?.persist?.(patch);
     },
     fetchImpl: options?.fetchImpl ?? makeDeps(log),
+    storeSecret: (name, value) => {
+      secrets.set(name, value);
+      options?.storeSecret?.(name, value);
+    },
+    secret: (name) => secrets.get(name) ?? '',
     now: () => FIXED,
   });
   return { world, host: new FakeHost(), cfg, dataDir, botDir, log, patches };
@@ -818,5 +825,30 @@ describe('可推池耗尽时的手动推送', () => {
     const reason = String(out.reason ?? '');
     expect(reason).toContain('已推');
     expect(reason).toMatch(/\d+ 条/);
+  });
+});
+
+describe('OpenAlex 密钥', () => {
+  it('写入走部署密钥存储，不落配置；视图只报是否已配置', async () => {
+    const saved: Array<[string, string]> = [];
+    const { world, host } = makeWorld({ storeSecret: (name, value) => saved.push([name, value]) });
+    await world.start(host.asHost());
+    const out = (await world.invoke('settings', 'setOpenAlexKey', ['ABCDEFGH12345678'], 'zh')) as { ok: boolean };
+    expect(out.ok).toBe(true);
+    expect(saved).toEqual([['OPENALEX_API_KEY', 'ABCDEFGH12345678']]);
+    expect(world.view('zh').config.openAlexKeySet).toBe(true);
+  });
+
+  it('格式不对就不写，空串表示不改动', async () => {
+    const saved: Array<[string, string]> = [];
+    const { world, host } = makeWorld({ storeSecret: (name, value) => saved.push([name, value]) });
+    await world.start(host.asHost());
+    const bad = (await world.invoke('settings', 'setOpenAlexKey', ['has spaces in it'], 'zh')) as { ok: boolean };
+    expect(bad.ok).toBe(false);
+    expect(saved).toHaveLength(0);
+
+    const empty = (await world.invoke('settings', 'setOpenAlexKey', [''], 'zh')) as { ok: boolean };
+    expect(empty.ok).toBe(true);
+    expect(saved).toHaveLength(0);
   });
 });

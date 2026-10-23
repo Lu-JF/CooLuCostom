@@ -762,3 +762,24 @@
 .ip-warn[hidden] {
   display: none;
 }
+
+/* 密钥一行：标签等宽，输入框占满剩余宽度，按钮不换行 */
+.ip-shell .ip-keyrow {
+  display: flex;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.ip-shell .ip-keyrow .ip-fieldlabel {
+  flex: 0 0 132px;
+  width: 132px;
+}
+
+.ip-shell .ip-keyrow input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ip-shell .ip-keyrow button {
+  flex: 0 0 auto;
+}

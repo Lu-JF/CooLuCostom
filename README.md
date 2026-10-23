@@ -5,7 +5,7 @@ Coopanion 桌宠的两个扩展，均以 Cortico World 包形式提供，不修�
 | 扩展 | 包名 | World id | 控制台显示名 | 功能 |
 |---|---|---|---|---|
 | 用量额度 | `cortico-world-quota` | `quota` | 用量额度 | 套餐额度、滚动窗口与本机 Hermes 用量，越阈值时由桌宠提醒 |
-| 论文推送 | `cortico-world-interest-push` | `interest-push` | 论文推送 | 按节奏抓取研究方向的论文，用气泡对话介绍，详情留在面板 |
+| 论文推送 | `cortico-world-dailypaper` | `interest-push` | 论文推送 | 按节奏抓取研究方向的论文，用气泡对话介绍，详情留在面板 |
 
 两个包相互独立，数据目录、页签与提示词各自一套，可只装其中一个。
 

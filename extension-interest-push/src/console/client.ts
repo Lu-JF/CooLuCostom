@@ -722,6 +722,38 @@ function mountSettings(ctx: ConsolePanelContext): void {
   quietRow.append(fieldRow(ui, t.settings.quietStart, quietStart.el), fieldRow(ui, t.settings.quietEnd, quietEnd.el));
   const abstractBox = ui.checkbox(t.settings.requireAbstract, { checked: true });
   const bareBox = ui.checkbox(t.settings.allowNoAbstract, { checked: false });
+  // OpenAlex 密钥：只写部署 .env，页面上不回显，只显示「已配置 / 未配置」。
+  const keyInput = ui.input({ type: 'password' });
+  keyInput.placeholder = t.settings.openAlexPlaceholder;
+  keyInput.autocomplete = 'off';
+  const keyState = ui.h('span', 'ip-note');
+  const keySaveBtn = ui.button(t.settings.openAlexSave, {
+    size: 'sm',
+    onClick: () => {
+      void (async () => {
+        const value = keyInput.value.trim();
+        keySaveBtn.disabled = true;
+        try {
+          const out = await ctx.invoke<InvokeResult>('setOpenAlexKey', [value]);
+          view = out.view;
+          if (out.ok) {
+            keyInput.value = '';
+            ui.toast(value === '' ? t.settings.openAlexSave : t.settings.openAlexSave, 'ok');
+          } else {
+            ui.toast(String(out.reason ?? ''), 'bad');
+          }
+          render();
+        } catch (err) {
+          ui.toast(errText(err), 'bad');
+        } finally {
+          keySaveBtn.disabled = false;
+        }
+      })();
+    },
+  });
+  const keyRow = ui.h('div', 'ip-fieldrow ip-keyrow');
+  keyRow.append(ui.h('span', 'ip-fieldlabel', t.settings.openAlexKey), keyInput, keySaveBtn);
+
   const week = weekdayButtons(ui);
   // 星期单独占一行：七个按钮横排，不与其它字段挤在一起。
   const weekRow = ui.h('div', 'ip-row-block');
@@ -807,6 +839,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
     block(ui, t.settings.blockWindow, sourceNumbers, fieldRow(ui, t.settings.mailto, mailtoInput)),
     block(ui, t.settings.blockAbstract, abstractBox.el, bareBox.el, ui.msgline(t.settings.abstractHint)),
     block(ui, t.settings.blockDownload, fieldRow(ui, t.settings.downloadDir, dirBar)),
+    block(ui, t.settings.blockOpenAlex, keyRow, keyState, ui.msgline(t.settings.openAlexHint)),
     sourcesFoot,
   );
 
@@ -974,6 +1007,8 @@ function mountSettings(ctx: ConsolePanelContext): void {
     setNum(delayInput, c.journalDelayDays);
     abstractBox.setChecked(c.requireAbstract);
     bareBox.setChecked(c.allowNoAbstractPush);
+    keyState.textContent = c.openAlexKeySet ? t.settings.openAlexSet : t.settings.openAlexUnset;
+    keyState.className = `ip-note${c.openAlexKeySet ? ' ip-note-ok' : ''}`;
     const conflicts = c.quietConflicts ?? [];
     quietWarn.textContent = conflicts.length > 0 ? t.settings.quietConflict(conflicts.join('、')) : '';
     quietWarn.hidden = conflicts.length === 0;

@@ -16,11 +16,11 @@ import { fileURLToPath } from 'node:url';
 /** 仓库里要同步的包：目录名（相对仓库根）与包名（与 package.json 的 name 一致）。 */
 const PACKAGES = [
   { dir: 'extension', name: 'cortico-world-quota' },
-  { dir: 'extension-interest-push', name: 'cortico-world-interest-push' },
+  { dir: 'extension-interest-push', name: 'cortico-world-dailypaper' },
 ];
 
 /** 拷贝白名单：运行时只要这些；node_modules 由框架侧提供，不拷。 */
-const ITEMS = ['src', 'dist', 'scripts', 'tests', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.web.json', 'vitest.config.ts'];
+const ITEMS = ['src', 'dist', 'assets', 'scripts', 'tests', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.web.json', 'vitest.config.ts'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');

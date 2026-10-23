@@ -103,6 +103,8 @@ export interface InterestPushView {
     downloadDir: string;
     requireAbstract: boolean;
     allowNoAbstractPush: boolean;
+    /** 是否已经配了 OpenAlex 密钥（值不回显）。 */
+    openAlexKeySet: boolean;
     /** 落在静默时段里的推送时刻（配置页据此提示）。 */
     quietConflicts: string[];
   };

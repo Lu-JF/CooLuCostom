@@ -321,7 +321,10 @@ HTTP 4xx/5xx 不重试。单测覆盖「只重试一次」。
 ### OpenAlex 的 key 放哪
 
 `host.secret(name)` 读的是**部署目录**的 `.env`，即 `data/home/companion/.env`，不是 `data/home/.env`。
-写成 `OPENALEX_API_KEY=…` 一行即可，代码里通过 `ctx.secret` 取，不落项目文件。
+面板「配置 → 数据源 → 摘要与机构的数据源密钥」写的就是这个文件，经 `ctx.storeSecret` 落盘，值不回显，
+视图只给 `openAlexKeySet`。
+
+`storeSecret` 拒绝空值与含空白的值，所以「清除密钥」不做成写空串：输入框留空表示不改动，换 key 直接粘贴新值覆盖。
 
 ### 作者机构
 
