@@ -115,10 +115,10 @@ export function decideRandom(
   if (!cfg.pushDays.includes(isoDay(now))) return { push: false, reason: 'day-off' };
   if (state.pushedToday >= cfg.dailyCap) return { push: false, reason: 'daily-cap' };
   if (now.getTime() < nextAt) return { push: false, reason: 'too-soon' };
-  // 到点之后再掷一次骰子：时间越长，命中概率越高，避免每次刚过最小间隔就必推。
+  // 到点之后再掷一次骰子：基础概率 0.6，超时越久越高，最多 0.95。
   const overdue = now.getTime() - nextAt;
   const minMs = Math.max(1, cfg.minIntervalMinutes) * 60_000;
-  const chance = Math.min(0.95, 0.35 + (overdue / minMs) * 0.6);
+  const chance = Math.min(0.95, 0.6 + (overdue / minMs) * 0.6);
   return rng() <= chance ? { push: true, reason: 'ok' } : { push: false, reason: 'too-soon' };
 }
 
