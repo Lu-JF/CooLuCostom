@@ -59,12 +59,13 @@ holds no third-party text).
 
 Given the `when` clause in TAGS.md — "any text written by a third party … goes into an
 event with origin 'internal'" — this no longer applies, so I would like the tag removed.
-If you prefer to keep it until a published version is available for inspection, the next
-npm release will be 0.12.2 or later and I will follow up here once it is on the registry.
+
+The fixed code is on npm: `cortico-world-dailypaper@0.13.1` (0.12.1 was the first version
+with the tool-based path; 0.12.2–0.13.1 are tuning and UI work on top of it).
 ```
 
 ## 交接说明
 
-- 维护者可能要求「先发布再复核」。当前 npm 上是 0.9.3，0.12.x 只在本地与 GitHub。
+- 维护者可能要求「先发布再复核」。修复已发布：npm `latest` 为 0.13.1，含工具回执这条链路的是 0.12.1 起。
 - 标签是人工记录在 `index.json` 的 `overrides` 里，只有合并 PR 或维护者改动才会消失。
 - 如果维护者不同意移除，可以接受在说明里补充「已迁移到工具回执」，但不要为此改回内部事件。
