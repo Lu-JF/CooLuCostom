@@ -21,6 +21,7 @@ export interface InterestText {
     checkFailed: (reason: string) => string;
     today: string;
     todayValue: (n: number, cap: number) => string;
+    todayOnly: (n: number) => string;
     next: string;
     nextAt: (at: string) => string;
     nextPaused: string;
@@ -207,8 +208,9 @@ const zh: InterestText = {
     checkNone: '尚未检查',
     checkAt: (at) => at,
     checkFailed: (reason) => `失败：${reason}`,
-    today: '今日推送',
+    today: '今日已推',
     todayValue: (n, cap) => `${n}/${cap}`,
+    todayOnly: (n) => `${n} 条`,
     next: '下次窗口',
     nextAt: (at) => at,
     nextPaused: '已暂停',
@@ -401,6 +403,7 @@ const en: InterestText = {
     checkFailed: (reason) => `failed: ${reason}`,
     today: 'Pushed today',
     todayValue: (n, cap) => `${n}/${cap}`,
+    todayOnly: (n) => `${n}`,
     next: 'Next window',
     nextAt: (at) => at,
     nextPaused: 'paused',

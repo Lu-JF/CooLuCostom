@@ -16,6 +16,11 @@ import './style.css';
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** 今日读数：随机模式给「已推/上限」，定时模式只给条数，上限在定时模式下不生效。 */
+function todayText(t: InterestText, pushed: number, cap: number, mode: 'fixed' | 'random'): string {
+  return mode === 'random' ? t.lamps.todayValue(pushed, cap) : t.lamps.todayOnly(pushed);
+}
+
 interface InvokeResult {
   ok: boolean;
   reason: string | null;
@@ -360,7 +365,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
   function render(): void {
     const v = view;
     const item = v?.active ?? null;
-    note.textContent = v ? `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)} · ${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}` : '';
+    note.textContent = v ? `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)} · ${t.lamps.today} ${todayText(t, v.schedule.pushedToday, v.config.dailyCap, v.config.pushMode)}` : '';
     titleBody.textContent = item?.title ?? '';
     const hasAbstract = (item?.abstract ?? '').trim() !== '';
     const alreadyRecorded = item !== null && (v?.records ?? []).some((r) => r.id === item.id);
@@ -549,7 +554,7 @@ function mountList(ctx: ConsolePanelContext): void {
     note.textContent = v
       ? [
           `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)}`,
-          `${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, v.config.dailyCap)}`,
+          `${t.lamps.today} ${todayText(t, v.schedule.pushedToday, v.config.dailyCap, v.config.pushMode)}`,
           v.schedule.paused ? t.badges.paused : '',
           pendingAbstract > 0 ? t.list.abstractPending(pendingAbstract) : '',
         ]
@@ -1173,7 +1178,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
     note.textContent = [
       `${t.lamps.check} ${fmtTime(v.schedule.lastCheckAt)}`,
-      `${t.lamps.today} ${t.lamps.todayValue(v.schedule.pushedToday, c.dailyCap)}`,
+      `${t.lamps.today} ${todayText(t, v.schedule.pushedToday, c.dailyCap, c.pushMode)}`,
       `${t.lamps.next} ${v.schedule.paused ? t.lamps.nextPaused : fmtTime(v.schedule.nextCheckAt)}`,
     ].join(' · ');
   }

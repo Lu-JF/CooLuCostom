@@ -934,8 +934,10 @@
 }
 
 /* 推送时刻：时与分直接输入 */
-.ip-shell .ip-timeinput {
-  width: 58px;
+.ip-shell .ip-inline input.ip-timeinput {
+  width: 4.4em;
+  min-width: 0;
+  padding: 4px 6px;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }

@@ -314,6 +314,12 @@ try {
       hasTierBasisColumn: /分区依据/.test(text),
       hasPerLineHint: /每行/.test(text),
       timeInputs: document.querySelectorAll('.ip-timeinput').length,
+      timeInputWidth: Math.round(document.querySelector('.ip-timeinput')?.getBoundingClientRect().width ?? 0),
+      timeInputOverflow: [...document.querySelectorAll('.ip-timeinput')].some((el) => {
+        const card = el.closest('.sheet');
+        return card ? el.getBoundingClientRect().right > card.getBoundingClientRect().right - 8 : false;
+      }),
+      todayLine: (document.body.textContent ?? '').match(/今日[^·\n]{0,12}/)?.[0] ?? '',
       timeEditable: [...document.querySelectorAll('.ip-timeinput')].every((el) => el.tagName === 'INPUT' && el.type === 'number'),
       weekInOwnRow: document.querySelector('.ip-week')?.parentElement?.classList.contains('ip-row-block') ?? false,
       gridClipped: [...document.querySelectorAll('.ip-gridbody')].some((el) => el.scrollHeight > el.clientHeight + 2 || getComputedStyle(el).overflow === 'auto'),
@@ -330,6 +336,8 @@ try {
     cfg.tags.slice(0, 6).join(' / '),
   );
   check('时刻是「时 + 分」两个数字输入框', cfg.timeInputs >= 2 && cfg.timeEditable, `${cfg.timeInputs} 个数字框`);
+  check('时刻输入框不超出卡片、宽度接近原来的下拉', cfg.timeInputWidth > 0 && cfg.timeInputWidth <= 80 && !cfg.timeInputOverflow, `${cfg.timeInputWidth}px`);
+  check('今日读数区分推送与抓取', /今日已推/.test(cfg.todayLine) && !/今日已推：\d+\/\d+/.test(cfg.todayLine), cfg.todayLine);
   const modeToggle = await (async () => {
     const before = await page.evaluate(() => [...document.querySelectorAll('.ip-switch')].map((b) => b.classList.contains('on')));
     if (before.length < 2) return { ok: false, text: '找不到开关' };

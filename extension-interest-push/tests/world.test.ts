@@ -489,7 +489,7 @@ describe('控制台声明', () => {
     expect(decl.lamps?.length).toBe(3);
     // 选项卡上方只有期刊与关键词两个标签；「已暂停」只在真的暂停时才挂（避免「已暂停 off」这种双重否定）。
     expect(decl.badges?.map((b) => b.label)).toEqual(['期刊', '关键词']);
-    expect(world.envPromptVars()['interestpush.status']).toContain('今日推送');
+    expect(world.envPromptVars()['interestpush.status']).toContain('今日已推');
   });
 });
 

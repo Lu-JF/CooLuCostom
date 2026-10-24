@@ -1421,7 +1421,10 @@ export class InterestPushWorld implements World {
     const unread = this.items.filter((i) => !this.state.read.includes(i.id)).length;
     return [
       `${t.lamps.check}：${this.state.lastCheckAt ? this.localTime(this.state.lastCheckAt) : t.lamps.checkNone}${this.lastError ? `（${this.lastError}）` : ''}`,
-      `${t.lamps.today}：${this.state.pushedToday}/${cfg.dailyCap}`,
+      // 每日上限只在随机模式生效，定时模式报条数即可，避免出现「2/2」这种用不满也看不出的读数。
+      cfg.pushMode === 'random'
+        ? `${t.lamps.today}：${this.state.pushedToday}/${cfg.dailyCap}`
+        : `${t.lamps.today}：${this.state.pushedToday} 条`,
       `${t.lamps.next}：${cfg.pausedUntil > this.now() ? t.lamps.nextPaused : next === null ? t.lamps.checkNone : this.localTime(next)}`,
       `未读：${unread}`,
     ].join(' · ');
