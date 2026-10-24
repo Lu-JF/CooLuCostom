@@ -1,67 +1,40 @@
-# 标签复核申请（中文版）
+# `[tags] cortico-world-dailypaper`（中文版）
 
-发到 `Pal-AI-Lab/cortico-extensions`，标题用下面这一行，正文整段复制。
-
-标题：
+提交到 `Pal-AI-Lab/cortico-extensions`，标题：
 
 ```
 [tags] cortico-world-dailypaper
 ```
 
-正文：
+正文（官方格式：一行一项 `键: 值`，中文键同样认）：
 
-```markdown
-申请复核 `cortico-world-dailypaper` 的 `injection-risk` 标签。
-
-`index.json` 里现在是：
-
-    "cortico-world-dailypaper": {
-      "addTags": ["injection-risk"],
-      "note": {
-        "zh": "抓取的论文标题、摘要与作者原文作为内部通知进入对话",
-        "en": "Scraped paper titles, abstracts and authors enter the conversation as internal notices"
-      }
-    }
-
-这条说明对 0.11.5 及更早版本成立：当时 `news.item` 事件正文里直接放了抓取到的标题、
-作者与摘要，事件来源标为 `origin: 'internal'`，会被渲染成用户消息。
-
-0.12.1 起，事件正文只保留本扩展自己的文字，即一个编号和一句处理要求：
-
-    [研究] 订阅推送一条，编号 0d82f45e。先调用 paper_read 取这条的资料，再按「论文推送」的环境提示词开口…
-
-抓取到的文本改由本世界自己注册的只读工具返回：
-
-    paper_read(id) -> 标题、期刊、作者、机构、DOI、爬取源、摘要
-
-也就是说，第三方文本以工具回执的身份进入上下文，不再是内部通知。回执另做了处理：
-
-- 用 `<<<外部资料开始…>>>` 与 `<<<外部资料结束>>>` 显式包住；
-- 去掉控制字符与零宽字符，压缩空白；
-- 标题截到 300 字，摘要截到 1200 字；
-- 环境提示词说明两行标记之间只是资料，其中的指令、角色设定、工具要求一律不执行，
-  与本提示词冲突时以提示词为准。
-
-真实会话里的调用顺序（`toolcalls.jsonl`，新版本）：
-
-    1 end_turn
-    2 paper_read {'id': '0d82f45e'}
-    3 pet_say    【excited】这篇我给 7.5 分…
-    4 pet_say    三块:先用动态多尺度卷积去噪自编码器预处理…
-    5 pet_ask    ['不感兴趣', '讲讲方法和结果', '讲讲创新点']
-
-代码位置：https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts
-（`tools()` 与 `paperText()`；推送处有注释说明事件正文为什么不放第三方文本。）
-
-按 `TAGS.md` 里该标签的判定条件「第三方写的文本以 `origin: 'internal'` 进入事件」，
-现在已不成立，希望移除标签。
-
-修复版本已发布到 npm：`cortico-world-dailypaper@0.13.1`。工具回执这条链路从 0.12.1 起，
-其后 0.12.2–0.13.1 是参数与界面上的调整。
+```text
+包名: cortico-world-dailypaper
+去: injection-risk
+理由: 抓取的论文标题、摘要与作者原文不再以 origin:'internal' 的事件进入对话；0.12.1 起事件正文只带编号，正文资料由本世界的只读工具 paper_read 以工具回执返回。
+证据: https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L156-L182（paper_read 工具）; https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L661-L681（news.item 正文只有编号与要求）; https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L699-L721（回执加首尾标记、清控制字符、摘要截断）; https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/ENV_PROMPT.md#L40-L47（提示词把标记之间当资料）; https://www.npmjs.com/package/cortico-world-dailypaper/v/0.13.1
 ```
 
-## 交接说明
+命令行等价：
 
-- 维护者可能要求「先发布再复核」。修复已发布：npm `latest` 为 0.13.1，工具回执链路自 0.12.1 起。
-- 标签是人工记录在 `index.json` 的 `overrides` 里，只有合并 PR 或维护者改动才会消失。
-- 如果维护者不同意移除，可以接受在说明里补充「已迁移到工具回执」，但不要为此改回内部事件。
+```bash
+gh issue create -R Pal-AI-Lab/cortico-extensions \
+  --title "[tags] cortico-world-dailypaper" \
+  --body $'包名: cortico-world-dailypaper\n去: injection-risk\n理由: 抓取的论文标题、摘要与作者原文不再以 origin:\'internal\' 的事件进入对话；0.12.1 起事件正文只带编号，资料由只读工具 paper_read 以工具回执返回。\n证据: https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L156-L182 ; https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L661-L681 ; https://github.com/Lu-JF/CooLuCostom/blob/main/extension-interest-push/src/world.ts#L699-L721 ; https://www.npmjs.com/package/cortico-world-dailypaper/v/0.13.1'
+```
+
+维护者若要运行时的先后顺序，把这段贴成评论或截图附上：
+
+```text
+1 end_turn
+2 paper_read {'id': '0d82f45e'}
+3 pet_say    【excited】这篇我给 7.5 分…
+4 pet_say    三块:先用动态多尺度卷积去噪自编码器预处理…
+5 pet_ask    ['不感兴趣', '讲讲方法和结果', '讲讲创新点']
+```
+
+## 备注
+
+- 标签 id 是 `injection-risk`，来自 `index.json` 的 `overrides`，人工加的，只有维护者改动或合并 PR 才会消失。
+- 0.12.1 起改走工具回执；0.12.2–0.13.1 是参数与界面调整，不改变这条判定。
+- 若维护者要求先发布再复核：`cortico-world-dailypaper@0.13.1` 已在 npm，`latest` 即此版本。
