@@ -932,3 +932,10 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+/* 推送时刻：时与分直接输入 */
+.ip-shell .ip-timeinput {
+  width: 58px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

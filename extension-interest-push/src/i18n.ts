@@ -96,6 +96,7 @@ export interface InterestText {
     modeFixed: string;
     modeOn: string;
     modeOff: string;
+    modeSaved: (name: string) => string;
     minInterval: string;
     randomHint: string;
     fixedHint: string;
@@ -283,6 +284,7 @@ const zh: InterestText = {
     modeFixed: '定时推送',
     modeOn: '开',
     modeOff: '关',
+    modeSaved: (name) => `已切换到${name}，立即生效`,
     minInterval: '最小间隔（分钟）',
     randomHint: '两次推送至少相隔该时长；间隔越久，推送概率越高。每日条数为上限。',
     fixedHint: '只在这些时刻推送，每个时刻每天一次。',
@@ -474,6 +476,7 @@ const en: InterestText = {
     modeFixed: 'Scheduled',
     modeOn: 'On',
     modeOff: 'Off',
+    modeSaved: (name) => `Switched to ${name}; applied now`,
     minInterval: 'Minimum gap (minutes)',
     randomHint: 'At least this long between pushes; the longer the gap, the higher the chance. Daily cap applies.',
     fixedHint: 'Push only at these times, once per time per day.',

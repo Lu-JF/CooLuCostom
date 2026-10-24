@@ -35,8 +35,6 @@ const localDateValue = (ms: number): string => {
 };
 
 /** 时、分两栏下拉：小时 00–23，分钟 5 分钟一档。全程点选，不用打字，也不会有非法输入。 */
-const HOUR_OPTIONS: string[] = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-const MINUTE_OPTIONS: string[] = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 /** 页签之间的跳转：控制台是 hash 路由，切失败就留在原地（本页仍能用）。 */
 function switchPanel(ctx: ConsolePanelContext, panelId: string): void {
@@ -76,20 +74,31 @@ interface TimeField {
 
 /** 「时 : 分」两个下拉。存量值不在 5 分钟档上时，补一个选项进去，原值照旧显示。 */
 function timeField(ui: U, initial: string): TimeField {
-  const hour = ui.select({ options: HOUR_OPTIONS, value: initial.slice(0, 2) });
-  const minute = ui.select({ options: MINUTE_OPTIONS, value: initial.slice(3, 5) });
+  const hour = ui.input({ type: 'number' });
+  hour.className = 'ip-timeinput';
+  hour.min = '0';
+  hour.max = '23';
+  hour.step = '1';
+  hour.value = initial.slice(0, 2);
+  const minute = ui.input({ type: 'number' });
+  minute.className = 'ip-timeinput';
+  minute.min = '0';
+  minute.max = '59';
+  minute.step = '1';
+  minute.value = initial.slice(3, 5);
   const el = ui.h('div', 'ip-inline');
   el.append(hour, ui.h('span', 'ip-timecolon', ':'), minute);
+  const pad = (raw: string, max: number): string => {
+    const n = Number.parseInt(raw, 10);
+    const v = Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0;
+    return String(v).padStart(2, '0');
+  };
   return {
     el,
-    value: () => `${hour.value}:${minute.value}`,
+    value: () => `${pad(hour.value, 23)}:${pad(minute.value, 59)}`,
     set: (value) => {
-      const h = value.slice(0, 2);
-      const m = value.slice(3, 5);
-      if (!HOUR_OPTIONS.includes(h) && h !== '') hour.appendChild(new Option(h, h));
-      if (!MINUTE_OPTIONS.includes(m) && m !== '') minute.appendChild(new Option(m, m));
-      hour.value = h;
-      minute.value = m;
+      hour.value = value.slice(0, 2);
+      minute.value = value.slice(3, 5);
     },
   };
 }
@@ -796,6 +805,12 @@ function mountSettings(ctx: ConsolePanelContext): void {
         try {
           const out = await ctx.invoke<InvokeResult>('saveSettings', [{ pushMode: next }]);
           view = out.view;
+          if (out.ok) {
+            const name = next === 'random' ? t.settings.modeRandom : t.settings.modeFixed;
+            ui.toast(t.settings.modeSaved(name), 'ok');
+          } else {
+            ui.toast(String(out.reason ?? ''), 'bad');
+          }
           render();
         } catch (err) {
           ui.toast(errText(err), 'bad');

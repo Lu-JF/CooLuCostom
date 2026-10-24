@@ -313,8 +313,8 @@ try {
       journalHead: document.querySelector('.ip-gridhead')?.textContent ?? '',
       hasTierBasisColumn: /分区依据/.test(text),
       hasPerLineHint: /每行/.test(text),
-      timeHasQuarter: [...document.querySelectorAll('select')].some((sel) => [...sel.options].some((o) => o.value === '15')),
-      timeSelects: [...document.querySelectorAll('select')].length,
+      timeInputs: document.querySelectorAll('.ip-timeinput').length,
+      timeEditable: [...document.querySelectorAll('.ip-timeinput')].every((el) => el.tagName === 'INPUT' && el.type === 'number'),
       weekInOwnRow: document.querySelector('.ip-week')?.parentElement?.classList.contains('ip-row-block') ?? false,
       gridClipped: [...document.querySelectorAll('.ip-gridbody')].some((el) => el.scrollHeight > el.clientHeight + 2 || getComputedStyle(el).overflow === 'auto'),
       bodyUnread: /未读/.test(document.body.textContent ?? ''),
@@ -329,7 +329,20 @@ try {
     cfg.tags.length >= 5 && cfg.tags.some((x) => /^\d{2}:\d{2}$/.test(x)) && cfg.tags.some((x) => x.includes('bearing')),
     cfg.tags.slice(0, 6).join(' / '),
   );
-  check('时刻是「时 + 分」两个下拉，分钟能选到 15（不用打字）', cfg.timeHasQuarter && cfg.timeSelects >= 2, `${cfg.timeSelects} 个下拉，含 15 分：${cfg.timeHasQuarter}`);
+  check('时刻是「时 + 分」两个数字输入框', cfg.timeInputs >= 2 && cfg.timeEditable, `${cfg.timeInputs} 个数字框`);
+  const modeToggle = await (async () => {
+    const before = await page.evaluate(() => [...document.querySelectorAll('.ip-switch')].map((b) => b.classList.contains('on')));
+    if (before.length < 2) return { ok: false, text: '找不到开关' };
+    const target = before[0] ? 1 : 0;
+    await page.evaluate((i) => document.querySelectorAll('.ip-switch')[i].click(), target);
+    await page.waitForTimeout(1500);
+    const toast = await page.evaluate(() => document.querySelector('.toast')?.textContent ?? '');
+    // 点回原来的模式，别把用户的配置留在测试值上
+    await page.evaluate((i) => document.querySelectorAll('.ip-switch')[i].click(), before[0] ? 0 : 1);
+    await page.waitForTimeout(1000);
+    return { ok: /已切换/.test(toast), text: toast };
+  })();
+  check('切换推送方式即时保存并提示', modeToggle.ok, modeToggle.text);
   check('星期是 1-7 的按钮、默认全亮、单独一行', cfg.weekCount === 7 && cfg.weekOn === 7 && cfg.weekInOwnRow, `${cfg.weekCount} 个按钮，亮 ${cfg.weekOn} 个，独占一行：${cfg.weekInOwnRow}`);
   check('期刊表只有刊名 / ISSN / 分区三列', /刊名/.test(cfg.journalHead) && /ISSN/.test(cfg.journalHead) && /分区/.test(cfg.journalHead) && !/分组/.test(cfg.journalHead), cfg.journalHead.trim().slice(0, 40));
   check('期刊只读：没有输入框，行数就是配置里的家数', cfg.journalRows >= 20 && cfg.journalInputs === 0, `${cfg.journalRows} 行 / 输入框 ${cfg.journalInputs} 个`);
