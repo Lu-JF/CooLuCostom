@@ -75,6 +75,7 @@ function makeWorld(options?: {
   persist?: (p: Partial<InterestPushConfigSection>) => void;
   fetchImpl?: typeof fetch;
   storeSecret?: (name: string, value: string) => void;
+  now?: () => number;
 }) {
   const dataDir = options?.dataDir ?? mkdtempSync(join(tmpdir(), 'ip-data-'));
   const botDir = options?.botDir ?? makeBotDir();
@@ -106,12 +107,41 @@ function makeWorld(options?: {
       options?.storeSecret?.(name, value);
     },
     secret: (name) => secrets.get(name) ?? '',
-    now: () => FIXED,
+    now: options?.now ?? (() => FIXED),
   });
   return { world, host: new FakeHost(), cfg, dataDir, botDir, log, patches };
 }
 
 const viewOf = (out: unknown): InterestPushView => (out as { view: InterestPushView }).view;
+
+describe('调度边界', () => {
+  it('推送轮次只判断推送，不再重新抓取', async () => {
+    const log = { crossref: 0, model: 0 };
+    const { world, host } = makeWorld({ log });
+    await world.start(host.asHost());
+    await world.invoke('settings', 'saveSettings', [{ pushMode: 'random', minIntervalMinutes: 1, dailyCap: 5 }], 'zh');
+    const before = log.crossref;
+    await (world as unknown as { doRun: (r: string) => Promise<void> }).doRun('push');
+    expect(log.crossref).toBe(before);
+  });
+
+  it('跨天保留已排的随机时刻，零点不会绕过最小间隔', async () => {
+    let now = FIXED;
+    const { world, host } = makeWorld({ now: () => now });
+    await world.start(host.asHost());
+    const inner = world as unknown as {
+      state: { nextPushAt: number | null; pushedDay: string };
+      rollDay: () => void;
+    };
+    const scheduled = FIXED + 3 * 3600_000;
+    inner.state.nextPushAt = scheduled;
+    inner.state.pushedDay = '2026-10-18';
+    now = FIXED + 24 * 3600_000;
+    inner.rollDay();
+    expect(inner.state.nextPushAt).toBe(scheduled);
+    expect(inner.state.pushedDay).not.toBe('2026-10-18');
+  });
+});
 
 describe('抓取与列表', () => {
   it('抓到一条就进列表，字段与爬取源都对，并落盘', async () => {

@@ -322,12 +322,12 @@ export class InterestPushWorld implements World {
     if (at === null) return;
     const delay = Math.max(5_000, at - this.now());
     this.pushTimer = setTimeout(() => {
-      void this.run('window').then(() => this.schedulePush());
+      void this.run('push').then(() => this.schedulePush());
     }, Math.min(delay, 6 * 60 * 60_000));
     this.pushTimer.unref?.();
   }
 
-  private async run(reason: 'start' | 'timer' | 'window' | 'manual'): Promise<void> {
+  private async run(reason: 'start' | 'timer' | 'window' | 'manual' | 'push'): Promise<void> {
     if (this.inflight) return this.inflight;
     this.inflight = this.doRun(reason).finally(() => {
       this.inflight = null;
@@ -335,22 +335,25 @@ export class InterestPushWorld implements World {
     return this.inflight;
   }
 
-  private async doRun(reason: 'start' | 'timer' | 'window' | 'manual'): Promise<void> {
+  private async doRun(reason: 'start' | 'timer' | 'window' | 'manual' | 'push'): Promise<void> {
     this.rollDay();
-    try {
-      const found = await this.collect();
-      this.lastError = null;
-      this.merge(found);
-      // 机构要补在合并之后：collect 阶段 this.items 还是上一轮的名单。
-      await this.enrichAffiliations(this.fetchDeps());
-    } catch (err) {
-      this.lastError = String((err as Error)?.message ?? err);
-      this.log(`抓取失败：${this.lastError}`);
+    // 推送时刻只做推送判断；抓取由每日检查与手动重抓负责，免得最小间隔 1 分钟时每分钟抓一遍。
+    if (reason !== 'push') {
+      try {
+        const found = await this.collect();
+        this.lastError = null;
+        this.merge(found);
+        // 机构要补在合并之后：collect 阶段 this.items 还是上一轮的名单。
+        await this.enrichAffiliations(this.fetchDeps());
+      } catch (err) {
+        this.lastError = String((err as Error)?.message ?? err);
+        this.log(`抓取失败：${this.lastError}`);
+      }
+      this.state.lastCheckAt = this.now();
     }
-    this.state.lastCheckAt = this.now();
     this.scanAnswers();
 
-    if (reason === 'window') {
+    if (reason === 'window' || reason === 'push') {
       const cfg = this.opts.cfg;
       const state = {
         pushedToday: this.state.pushedToday,
@@ -358,7 +361,7 @@ export class InterestPushWorld implements World {
         lastPushAt: this.state.lastPushAt,
       };
       if (cfg.pushMode === 'random') {
-        const nextAt = this.state.nextPushAt ?? this.now();
+        const nextAt = this.state.nextPushAt ?? randomNextAt(this.state.lastPushAt, cfg.minIntervalMinutes, this.now());
         const decision = decideRandom(this.scheduleConfig(), new Date(this.now()), state, nextAt);
         if (decision.push) {
           const item = this.pickPushItem();
@@ -1394,7 +1397,7 @@ export class InterestPushWorld implements World {
       this.state.pushedDay = key;
       this.state.pushedToday = 0;
       this.state.lastWindowKey = null;
-      this.state.nextPushAt = null;
+      // nextPushAt 是绝对时刻，跨天后仍然有效；清掉会让零点立刻重掷，绕过最小间隔。
     }
   }
 

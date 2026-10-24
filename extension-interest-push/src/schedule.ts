@@ -115,22 +115,23 @@ export function decideRandom(
   if (!cfg.pushDays.includes(isoDay(now))) return { push: false, reason: 'day-off' };
   if (state.pushedToday >= cfg.dailyCap) return { push: false, reason: 'daily-cap' };
   if (now.getTime() < nextAt) return { push: false, reason: 'too-soon' };
-  // 到点之后再掷一次骰子：基础概率 0.6，超时越久越高，最多 0.95。
+  // 到点先掷一次骰子：基础概率 0.83，之后每超时一个最小间隔加 0.12，最多 0.95。
   const overdue = now.getTime() - nextAt;
   const minMs = Math.max(1, cfg.minIntervalMinutes) * 60_000;
-  const chance = Math.min(0.95, 0.6 + (overdue / minMs) * 0.6);
+  const chance = Math.min(0.95, 0.83 + (overdue / minMs) * 0.12);
   return rng() <= chance ? { push: true, reason: 'ok' } : { push: false, reason: 'too-soon' };
 }
 
 /**
- * 下一次随机推送不早于什么时候：最小间隔 + 指数分布的额外等待，平均再等一个最小间隔。
- * 这样「超过最小间隔越久越可能推」在两处都成立。
+ * 下一次随机推送不早于什么时候：最小间隔 + 指数分布的额外等待，
+ * 额外等待的平均值是最小间隔的 0.3 倍——配合 0.83 的基础命中率，
+ * 累计推送概率在最小间隔的 2.5 倍左右到 90%。
  */
 export function randomNextAt(lastPushAt: number | null, minIntervalMinutes: number, now: number, rng: () => number = Math.random): number {
   const minMs = Math.max(1, minIntervalMinutes) * 60_000;
   const base = lastPushAt ?? now;
   const u = Math.min(0.999, Math.max(0.001, rng()));
-  return Math.round(base + minMs + -Math.log(1 - u) * minMs);
+  return Math.round(base + minMs + -Math.log(1 - u) * minMs * 0.3);
 }
 
 /** 定时模式下「下一个窗口」的时刻；没有可用的时刻返回 null。 */

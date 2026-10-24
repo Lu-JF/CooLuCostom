@@ -96,9 +96,9 @@ describe('随机模式', () => {
     const now = at(12, 0).getTime();
     const d = decideRandom(baseConfig({ mode: 'random' }), at(12, 0), state(), now - 1_000, () => 0.1);
     expect(d).toEqual({ push: true, reason: 'ok' });
-    // 刚到点的基础概率是 0.6：0.59 命中，0.61 不命中
-    expect(decideRandom(baseConfig({ mode: 'random' }), at(12, 0), state(), now, () => 0.59).push).toBe(true);
-    expect(decideRandom(baseConfig({ mode: 'random' }), at(12, 0), state(), now, () => 0.61).push).toBe(false);
+    // 刚到点的基础概率是 0.83：0.82 命中，0.84 不命中
+    expect(decideRandom(baseConfig({ mode: 'random' }), at(12, 0), state(), now, () => 0.82).push).toBe(true);
+    expect(decideRandom(baseConfig({ mode: 'random' }), at(12, 0), state(), now, () => 0.84).push).toBe(false);
   });
 
   it('每日上限与星期在随机模式里仍然生效', () => {
