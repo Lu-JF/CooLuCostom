@@ -140,19 +140,28 @@ describe('抓取与列表', () => {
 });
 
 describe('推送与回执', () => {
-  it('推一条就发一个 news.item 事件，正文带标题、DOI、爬取源与编号', async () => {
+  it('推送事件不含论文原文，资料由 paper_read 工具给出', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     await world.invoke('settings', 'pushNow', [], 'zh');
     const pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(1);
-    const text = pushed[0]!.text;
-    expect(text).toContain('[研究] 订阅推送一条');
+    expect(pushed[0]!.origin).toBe('internal');
+    expect(pushed[0]!.text).toContain('[研究] 订阅推送一条');
+    expect(pushed[0]!.text).toContain('paper_read');
+    // 第三方原文不进事件正文
+    expect(pushed[0]!.text).not.toContain('Bearing fault diagnosis');
+    expect(pushed[0]!.text).not.toContain('摘要：');
+    expect(pushed[0]!.trigger).toBe('flush');
+
+    const id = /编号 ([0-9a-f]{8})/.exec(pushed[0]!.text)![1]!;
+    const tool = world.tools()[0]!;
+    const text = await tool.handler({ id }, {} as never) as string;
+    expect(text.startsWith('<<<外部资料开始')).toBe(true);
+    expect(text.trimEnd().endsWith('<<<外部资料结束>>>')).toBe(true);
     expect(text).toContain('标题：Bearing fault diagnosis');
     expect(text).toContain('DOI：10.1016/j.ymssp.2026.123456');
     expect(text).toContain('爬取源：crossref:0888-3270');
-    expect(text).toMatch(/编号 [0-9a-f]{8}/);
-    expect(pushed[0]!.trigger).toBe('flush');
   });
 
   it('推完页签跟到刚推那篇；再点一次换下一篇，不连着推同一篇', async () => {
@@ -219,7 +228,7 @@ describe('推送与回执', () => {
     await world.start(host.asHost());
     expect(world.view('zh').items).toHaveLength(2);
     await world.invoke('settings', 'pushNow', [], 'zh');
-    const text = host.pushed.filter((e) => e.type === 'news.item')[0]?.text ?? '';
+    const text = String(await world.tools()[0]!.handler({ id: world.view('zh').active!.id }, {} as never));
     // 页面上那篇是最新的（没有摘要），推不了：换下一篇有摘要的，页签跟过去。
     expect(world.view('zh').active?.doi).toBe('10.1016/with-abstract');
     expect(text).toContain('DOI：10.1016/with-abstract');
@@ -559,13 +568,14 @@ describe('大肥鱼速评', () => {
     expect(again.review?.total).toBe(7.5);
   });
 
-  it('推送正文先给速评与分数，再给题录', async () => {
+  it('外部资料里先给速评与分数，再给题录', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
     await world.invoke('settings', 'pushNow', [], 'zh');
     const pushed = host.pushed.filter((e) => e.type === 'news.item');
-    const lines = pushed[0]!.text.split('\n');
-    expect(lines[0]).toContain('大肥鱼速评');
+    const id = /编号 ([0-9a-f]{8})/.exec(pushed[0]!.text)![1]!;
+    const lines = String(await world.tools()[0]!.handler({ id }, {} as never)).split('\n');
+    expect(lines[0]).toContain('外部资料开始');
     expect(lines[1]).toContain('速评（大肥鱼，7.5/10）');
     expect(lines[2]).toContain('标题：Bearing fault diagnosis');
   });
@@ -592,7 +602,7 @@ describe('大肥鱼速评', () => {
     const pushed = host.pushed.filter((e) => e.type === 'news.item');
     expect(pushed).toHaveLength(1);
     expect(pushed[0]!.senderKey).toBe('bbbb0002');
-    expect(pushed[0]!.text).toContain('标题：Older paper');
+    expect(String(await world.tools()[0]!.handler({ id: 'bbbb0002' }, {} as never))).toContain('标题：Older paper');
   });
 });
 
