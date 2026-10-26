@@ -182,7 +182,7 @@ describe('QuotaWorld', () => {
     const hermes = await w.tools()[1]!.handler({ days: 3 }, {} as never);
     expect(String(hermes)).toContain('Hermes 用量（最近 3 天）');
 
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     expect(decl.label).toBe('用量额度');
     expect(decl.lamps?.map((l) => l.state)).toEqual(['loading', 'offline']);
     expect(decl.badges?.map((b) => b.label)).toEqual(['套餐', '账号', '5 小时', '本周', '本月余额']);
@@ -196,7 +196,7 @@ describe('QuotaWorld', () => {
     stubCommandCode();
     const { world: w } = world();
     await w.start(new FakeHost().asHost());
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     const state = (await decl.invoke!('quota', 'state', [{ days: 3 }])) as Record<string, any>;
     expect(state.quota.planLabel).toBe('GOAT');
     expect(state.hermes.days).toBe(3);
@@ -224,7 +224,7 @@ describe('QuotaWorld', () => {
     const caught: Caught[] = [];
     stubCommandCode(caught);
     const { world: w, secrets } = world();
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     await w.start(new FakeHost().asHost());
 
     const after = (await decl.invoke!('quota', 'addAccount', [{ label: '备用', key: 'user_abcdef123456' }])) as Record<string, any>;
@@ -248,7 +248,7 @@ describe('QuotaWorld', () => {
       (async () => new Response('{}', { status: 401, headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch,
     );
     const { world: w, secrets } = world();
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     await w.start(new FakeHost().asHost());
     await expect(decl.invoke!('quota', 'addAccount', [{ label: '坏的', key: 'nope' }])).rejects.toThrow(/rejected the key/);
     expect(w.view('zh').accounts.list).toEqual([]);
@@ -260,7 +260,7 @@ describe('QuotaWorld', () => {
     stubCommandCode();
     const { world: w } = world({ alertPercent: 80 });
     const host = new FakeHost();
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     await w.start(host.asHost());
     expect(host.pushed.length).toBe(1);
 
@@ -296,7 +296,7 @@ describe('QuotaWorld', () => {
       persist: vi.fn(),
     });
     await first.start(new FakeHost().asHost());
-    const decl = first.console('zh');
+    const decl = first.webUi('zh');
     await decl.invoke!('quota', 'addAccount', [{ label: '主号', key: 'user_zzzzzzzz9999' }]);
     await first.stop();
 
@@ -368,7 +368,7 @@ describe('QuotaWorld', () => {
       'CommandCode-2',
     );
     const { world: w } = world({ commandcodeKey: '' }, fakeSecrets(), botDir);
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     await w.start(new FakeHost().asHost());
 
     const first = w.view('zh');
@@ -388,7 +388,7 @@ describe('QuotaWorld', () => {
   it('面板保存走 saveSettings：一次写回、当场夹紧，不经过配置页的即时保存', async () => {
     stubCommandCode();
     const { world: w, persist } = world();
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     await w.start(new FakeHost().asHost());
 
     const after = (await decl.invoke!('quota', 'saveSettings', [
@@ -405,7 +405,7 @@ describe('QuotaWorld', () => {
     stubCommandCode();
     const { world: w } = world();
     await w.start(new FakeHost().asHost());
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
     expect(decl.config ?? []).toEqual([]);
     expect(decl.panels?.map((p) => p.id)).toEqual(['quota', 'settings']);
     expect(decl.panels?.[1]?.title).toBe('配置');
@@ -423,7 +423,7 @@ describe('QuotaWorld', () => {
     stubCommandCode(caught);
     const { world: w } = world();
     await w.start(new FakeHost().asHost());
-    const decl = w.console('zh');
+    const decl = w.webUi('zh');
 
     const before = caught.length;
     const state = (await decl.invoke!('quota', 'state', [{ days: 7 }])) as Record<string, any>;

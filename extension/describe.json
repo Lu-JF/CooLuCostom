@@ -1,0 +1,60 @@
+{
+  "tools": [
+    {
+      "name": "quota_status",
+      "description": "Read the Command Code plan quota: monthly credit balance, the rolling 5-hour and weekly windows with their reset times, and the plan and billing period. Use it when asked how much quota is left.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "列出各端点与账号的额度、剩余与重置时间",
+        "en": "Quota, remaining and reset time per endpoint and account"
+      }
+    },
+    {
+      "name": "quota_hermes",
+      "description": "Read local Hermes token usage: call counts and token totals per model and per day, over the last N days (default 7). Use it when asked what Hermes has been spending.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "days": {
+            "type": "integer",
+            "description": "How many days back to total. Defaults to the configured range (7).",
+            "minimum": 1,
+            "maximum": 90
+          }
+        }
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "按天数汇总 Hermes 的会话用量",
+        "en": "Hermes session usage totalled over N days"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "quota.window",
+      "description": {
+        "zh": "额度将尽或已重置时提醒",
+        "en": "A quota is nearly used up or just reset"
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "key": "worlds.quota.envPrompt",
+      "title": "用量额度 · 环境提示词",
+      "role": "envPrompt",
+      "content": "## 用量额度\n\n这个 World 盯两件事：**Command Code 套餐的额度**（月度余额，以及 5 小时、每周两个滚动窗口）和**本机 Hermes 的 token 用量**。两者都不需要你主动查，事件自己会来；有人问起时用下面两个工具回答。\n\n{{quota.summary}}\n\n### 收到 `[用量]` 事件时\n\n事件正文已经写明是哪个窗口、用了多少、什么时候重置，以及本月还剩多少。它由机械判定产生，不是谁的判断，事实照抄，不要推算。\n\n- 用 `pet_say` 转告使用者：一两句话，先说结论（哪个窗口、用了多少）、再说重置时间。别把正文原样念一遍。\n- 只在值得打扰时说。同一条提醒一个窗口只来一次；用完（窗口打满）比到达阈值更值得说一句。\n- 使用者正在忙、在开会，或者当地时间是深夜，用 `pet_quiet` 而不是改设置；也可以什么都不说，事情已经记在记录里，控制台的「用量额度」页随时看得到。\n- 对方回话问细节时，用 `quota_status`，别凭记忆报数。\n\n### 工具\n\n- `quota_status`：套餐额度快照，含月度余额、两个窗口的已用与重置时刻、套餐名与订阅周期。\n- `quota_hermes(days)`：最近若干天 Hermes 的调用次数与 token（默认按配置的天数）。用户问「hermes 花了多少」「今天跑了多少 token」时用它。\n\n两个工具都只读，都不改任何设置。要改阈值、检查间隔或密钥来源，告诉使用者去控制台这一页的「配置」页签\n（表单填完点「保存」才生效）。那是使用者的设置项，自己不要动。\n\n### 其它几件事不在你那\n\n同一页上还有：账号（自动取用桌宠里配的 Command Code 端点：登录邮箱、套餐、密钥尾四位，以及桌宠是否\n正在用它说话）、供应商切换（只有 Command Code 有实现，别家切过去只有说明）、可用模型清单、计划价目与\n按模型的额度。有人问这些，让他自己看那一页；工具回执里带的就是当前账号的读数。\n"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
  * 形状与真宿主一致，所以这里过得了的调用序列，装进 Coopanion 也不会因为用法错而炸。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import bundle from '../src/console/client.ts';
+import bundle from '../src/webui/client.ts';
 import type { QuotaView } from '../src/view-types.ts';
 
 const view = (overrides: Partial<QuotaView> = {}): QuotaView => ({

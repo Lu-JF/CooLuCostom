@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Language } from 'cortico/core/language.ts';
-import type { ToolDef, World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
+import type { ToolDef, World, WorldWebUiDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import {
   accountsPath,
@@ -40,6 +40,7 @@ import { fetchPlanPricing, planSlugFor } from './pricing.ts';
 import { quotaText, type QuotaText } from './i18n.ts';
 import { COMMANDCODE_SOURCE, sourceById, SOURCES, type ModelInfo, type QuotaSource } from './sources.ts';
 import type { AccountWire, ModelInfoWire, PlanPricingWire, QuotaView, SourceWire } from './view-types.ts';
+import { QUOTA_HERMES_PARAMETERS, QUOTA_STATUS_PARAMETERS, QUOTA_TOOL_TAGS } from './tool-spec.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 /** 面板每问一次都重取太频繁；这个窗口内的读数直接用缓存。 */
@@ -204,7 +205,7 @@ export class QuotaWorld implements World {
     this.timer = null;
   }
 
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = quotaText(language);
     const pct = busiestPercent(this.quota);
     const worst = pct === null ? null : percent(pct);
@@ -637,8 +638,8 @@ export class QuotaWorld implements World {
     return {
       name: 'quota_status',
       description: quotaText('en').tools.statusDesc,
-      tags: ['read'],
-      parameters: { type: 'object', additionalProperties: false, properties: {} },
+      tags: [...QUOTA_TOOL_TAGS],
+      parameters: QUOTA_STATUS_PARAMETERS,
       handler: async () => {
         await this.refresh({ reason: 'tool', days: this.opts.cfg.hermesDays });
         const t = quotaText('zh');
@@ -651,14 +652,8 @@ export class QuotaWorld implements World {
     return {
       name: 'quota_hermes',
       description: quotaText('en').tools.hermesDesc,
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          days: { type: 'integer', description: 'How many days back to total. Defaults to the configured range (7).', minimum: 1, maximum: 90 },
-        },
-      },
+      tags: [...QUOTA_TOOL_TAGS],
+      parameters: QUOTA_HERMES_PARAMETERS,
       handler: async (args) => {
         const raw = Number(args.days);
         const days = Number.isFinite(raw) && raw >= 1 ? Math.min(90, Math.round(raw)) : Number(this.opts.cfg.hermesDays) || 7;

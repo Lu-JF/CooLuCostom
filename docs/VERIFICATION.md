@@ -39,8 +39,8 @@ pnpm check:extension <扩展目录>
 框架契约: world v5 / provider v5 / bot v6
   ✓ manifest: kind=world, api=5
   ✓ 默认导出符合 world 的形状; id = quota
-  ✓ 浏览器端产物: dist/console.js （页 id world:quota）
-  ✓ 浏览器端样式: dist/console.css
+  ✓ 浏览器端产物: dist/webui.js （页 id world:quota）
+  ✓ 浏览器端样式: dist/webui.css
   ✓ defaults() / create() / tools(): quota_status, quota_hermes / envPromptVars() / console()
 扩展检查通过。
 ```
@@ -207,7 +207,7 @@ npx vitest run           # 12 个文件 160 项通过（含「换一篇」「无
                          #   「补到的摘要写回已有条目」「只推有摘要的条目」「按标题补摘要的标题匹配」
                          #   「兴趣记录增删落盘」「可选配额密钥」等用例）
 npx tsc -p tsconfig.json --noEmit && npx tsc -p tsconfig.web.json --noEmit   # 0 错
-npm run build            # dist/console.js ~20 KB · dist/console.css ~3 KB
+npm run build            # dist/webui.js ~20 KB · dist/webui.css ~3 KB
 ```
 
 覆盖面：Crossref / arXiv / 每日论文榜三种源的规范化与抓取参数、arXiv 检索式与 Atom 解析、相关性过滤、

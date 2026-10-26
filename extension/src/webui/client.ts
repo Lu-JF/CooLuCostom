@@ -7,7 +7,7 @@
  * 面板不直连 HTTP、不碰 document.body。密钥只在添加账号那一次经 invoke 递过去，面板不落存储。
  * 语言取 `ctx.language`，文案在 ../i18n.ts。
  */
-import type { ConsoleCell, ConsoleClientBundle, ConsolePanelContext, ConsoleProgress } from 'cortico/web/shared/client-panel.ts';
+import type { WebUiCell, WebUiClientBundle, WebUiPanelContext, WebUiProgress } from 'cortico/web/shared/client-panel.ts';
 import { agoText, clockText, compactCount, durationText, money, percent } from '../format.ts';
 import { quotaText } from '../i18n.ts';
 import type { AccountWire, ModelWire, QuotaView, QuotaWire, WindowWire } from '../view-types.ts';
@@ -21,7 +21,7 @@ function windowTone(w: WindowWire | null, threshold: number): 'plain' | 'warn' |
   return threshold > 0 && w.usedPercent >= threshold ? 'accent' : 'plain';
 }
 
-function mount(ctx: ConsolePanelContext): void {
+function mount(ctx: WebUiPanelContext): void {
   const L = ctx.language;
   const t = (): ReturnType<typeof quotaText> => quotaText(L);
   const ui = ctx.ui;
@@ -90,7 +90,7 @@ function mount(ctx: ConsolePanelContext): void {
     ];
     for (const [name, w] of windows) {
       if (!w) continue;
-      const bar: ConsoleProgress = ui.progress({
+      const bar: WebUiProgress = ui.progress({
         label: name,
         max: w.cap,
         value: w.used,
@@ -413,7 +413,7 @@ function mount(ctx: ConsolePanelContext): void {
   hermesSheet.body.append(hermesBar, hermesBody);
   shell.appendChild(hermesSheet.el);
 
-  function modelCells(row: ModelWire): ConsoleCell[] {
+  function modelCells(row: ModelWire): WebUiCell[] {
     return [
       { text: `${row.provider ? `${row.provider} · ` : ''}${row.model || '—'}`, cls: 'mono' },
       row.calls,
@@ -507,7 +507,7 @@ function mount(ctx: ConsolePanelContext): void {
 // 框架的配置页是 400ms 防抖即时保存（敲一半就写进去），所以这里自己画一页：
 // 表单填完点「保存」才一次性写回（World 端 saveSettings → ctx.persist）。
 
-function mountSettings(ctx: ConsolePanelContext): void {
+function mountSettings(ctx: WebUiPanelContext): void {
   const L = ctx.language;
   const t = (): ReturnType<typeof quotaText> => quotaText(L);
   const ui = ctx.ui;
@@ -671,6 +671,6 @@ function mountSettings(ctx: ConsolePanelContext): void {
   })();
 }
 
-const bundle: ConsoleClientBundle = { panels: { quota: { mount }, settings: { mount: mountSettings } } };
+const bundle: WebUiClientBundle = { panels: { quota: { mount }, settings: { mount: mountSettings } } };
 
 export default bundle;

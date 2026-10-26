@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src/console/**/*.ts", "src/i18n.ts", "src/format.ts", "src/view-types.ts", "tests/console-panel.test.ts"]
+  "include": ["src/webui/**/*.ts", "src/i18n.ts", "src/format.ts", "src/view-types.ts", "tests/webui-panel.test.ts"]
 }

@@ -1,13 +1,13 @@
 # 安装步骤
 
 扩展包位于 `../extension`，包名 `cortico-world-quota`，World id 为 `quota`。面板产物为
-manifest 中 `cortico.consoleClient` 与 `cortico.consoleStyle` 指向的 `dist/` 目录，缺少该目录时扩展页会提示
+manifest 中 `cortico.webUiClient` 与 `cortico.webUiStyle` 指向的 `dist/` 目录，缺少该目录时扩展页会提示
 产物缺失，页面无内容，因此安装前须先构建：
 
 ```bash
 cd ../extension
 npm install
-npm run build      # 生成 dist/console.js 与 dist/console.css
+npm run build      # 生成 dist/webui.js 与 dist/webui.css
 ```
 
 ## 1. 官方安装版

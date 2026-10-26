@@ -15,5 +15,5 @@
     "noEmit": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/console/**", "tests/console-panel.test.ts"]
+  "exclude": ["node_modules", "dist", "src/webui/**", "tests/webui-panel.test.ts"]
 }

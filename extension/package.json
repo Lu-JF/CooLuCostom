@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-quota",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "type": "module",
   "description": "Cortico World: Command Code plan quota (monthly credits, rolling 5-hour and weekly windows) plus multi-account switching, the plan's model list with unit prices and per-model allowances, vendor switch seams, and local Hermes token usage, as a console panel with progress bars and as spoken alerts through the desktop pet",
   "license": "MIT",
@@ -17,25 +17,27 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "world",
-    "api": 5,
+    "api": 6,
     "displayName": "用量额度",
-    "consoleClient": "dist/console.js",
-    "consoleStyle": "dist/console.css"
+    "webUiClient": "dist/webui.js",
+    "webUiStyle": "dist/webui.css",
+    "describe": "describe.json"
   },
   "files": [
     "src",
     "dist",
-    "README.md"
+    "README.md",
+    "describe.json"
   ],
   "scripts": {
-    "build": "node scripts/build-console.mjs",
+    "build": "node scripts/build-webui.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.web.json",
     "link:instance": "node scripts/link-into-instance.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "cortico": "^0.1.13",
+    "cortico": "^0.2.7",
     "esbuild": "^0.25.0",
     "jsdom": "^30.1.2",
     "playwright-core": "^1.64.0",
