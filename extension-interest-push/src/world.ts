@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFile
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Language } from 'cortico/core/language.ts';
-import type { ToolDef, World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
+import type { ToolDef, World, WorldWebUiDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import type { InterestPushConfigSection, JournalEntry } from './config.ts';
 import { lookupJournal, normalizeIssn, probeLatest, resolveTier } from './journal.ts';
@@ -30,6 +30,7 @@ import { relevant } from './relevance.ts';
 import { interestText } from './i18n.ts';
 import { resolvePetModel } from './pet-model.ts';
 import { keepsInPool, pickManualCandidate, pickPushCandidate, sortForList, type PickOptions } from './pick.ts';
+import { PAPER_READ_DESCRIPTION, PAPER_READ_PARAMETERS, PAPER_READ_TAGS } from './paper-tool.ts';
 import { readReview, reviewItem } from './review.ts';
 import { decideFixed, decideRandom, nextWindowAt, randomNextAt, type ScheduleConfig } from './schedule.ts';
 import { SeenStore } from './seen.ts';
@@ -157,17 +158,9 @@ export class InterestPushWorld implements World {
     return [
       {
         name: 'paper_read',
-        description:
-          'Read one pushed paper: title, journal, authors, institution, DOI, source and abstract. '
-          + 'Call this with the id from a news.item event before speaking about that paper.',
-        tags: ['read'],
-        parameters: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: 'The 8-character id carried by the news.item event.' },
-          },
-          required: ['id'],
-        },
+        description: PAPER_READ_DESCRIPTION,
+        tags: [...PAPER_READ_TAGS],
+        parameters: PAPER_READ_PARAMETERS,
         handler: async (args) => {
           const id = String(args.id ?? '').trim().toLowerCase();
           if (id === '') return '[bad input] id must not be empty';
@@ -206,7 +199,7 @@ export class InterestPushWorld implements World {
     this.answerTimer = null;
   }
 
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = interestText(language);
     const paused = this.opts.cfg.pausedUntil > this.now();
     const nextWindow = this.nextWindowAt();

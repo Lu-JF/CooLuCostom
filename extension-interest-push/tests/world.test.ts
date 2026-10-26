@@ -511,7 +511,7 @@ describe('控制台声明', () => {
   it('三个页签、提示词模板与读数都在', async () => {
     const { world, host } = makeWorld();
     await world.start(host.asHost());
-    const decl = world.console('zh');
+    const decl = world.webUi('zh');
     expect(decl.label).toBe('论文推送');
     // 详情排第一：使用者真正要看的是这一页。
     expect(decl.panels?.map((p) => p.id)).toEqual(['detail', 'list', 'records', 'settings']);

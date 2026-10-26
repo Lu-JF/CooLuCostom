@@ -1,6 +1,6 @@
 {
   "name": "cortico-world-dailypaper",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "type": "module",
   "keywords": [
     "cortico-world",
@@ -14,7 +14,7 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "world",
-    "api": 5,
+    "api": 6,
     "displayName": "论文推送",
     "icon": "assets/icon.png",
     "screenshots": [
@@ -22,24 +22,25 @@
       "assets/shot-list.png",
       "assets/shot-settings.png"
     ],
-    "consoleClient": "dist/console.js",
-    "consoleStyle": "dist/console.css",
+    "webUiClient": "dist/webui.js",
+    "webUiStyle": "dist/webui.css",
     "locales": {
       "en": {
         "displayName": "Paper Push",
         "description": "Follow your research keywords across journals and arXiv. The pet introduces each paper with a quick review; the console shows abstract, translation, institution and DOI. Repository: https://github.com/Lu-JF/CooLuCostom"
       }
-    }
+    },
+    "describe": "describe.json"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run",
-    "build": "node scripts/build-console.mjs",
+    "build": "node scripts/build-webui.mjs",
     "check:render": "node scripts/check-panel-render.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "cortico": "^0.1.13",
+    "cortico": "^0.2.7",
     "esbuild": "^0.25.0",
     "jsdom": "^30.1.2",
     "playwright-core": "^1.64.1",

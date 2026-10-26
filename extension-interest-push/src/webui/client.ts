@@ -9,7 +9,7 @@
  *
  * 数据全走 `ctx.invoke`；面板不直连 HTTP、不碰 document.body。语言取 `ctx.language`，文案在 ../i18n.ts。
  */
-import type { ConsoleClientBundle, ConsolePanelContext } from 'cortico/web/shared/client-panel.ts';
+import type { WebUiClientBundle, WebUiPanelContext } from 'cortico/web/shared/client-panel.ts';
 import { interestText, type InterestText } from '../i18n.ts';
 import type { InterestPushView, NewsRow } from '../view-types.ts';
 import './style.css';
@@ -42,7 +42,7 @@ const localDateValue = (ms: number): string => {
 /** 时、分两栏下拉：小时 00–23，分钟 5 分钟一档。全程点选，不用打字，也不会有非法输入。 */
 
 /** 页签之间的跳转：控制台是 hash 路由，切失败就留在原地（本页仍能用）。 */
-function switchPanel(ctx: ConsolePanelContext, panelId: string): void {
+function switchPanel(ctx: WebUiPanelContext, panelId: string): void {
   try {
     const hash = `#/provider/${encodeURIComponent(ctx.pageId)}/${panelId}`;
     if (location.hash !== hash) location.hash = hash;
@@ -55,7 +55,7 @@ function metaLine(row: NewsRow): string {
   return [row.journal, row.tier ?? '', row.issued, row.source].filter((s) => s !== '').join(' · ');
 }
 
-type U = ConsolePanelContext['ui'];
+type U = WebUiPanelContext['ui'];
 
 /** 标签与控件同行的紧凑字段（框架的 field 会把控件顶到下一行，这里自己排）。 */
 function fieldRow(ui: U, label: string, control: HTMLElement): HTMLLabelElement {
@@ -212,7 +212,7 @@ function weekdayButtons(ui: U, onChange?: () => void): { el: HTMLDivElement; val
 // --------------------------------------------------------------------- 详情
 
 /** 行内状态：一个小圆圈 + 一句话，替代会挡住整页的 busy 遮罩（翻译、速评、检查都长，遮罩体验太差）。 */
-function makeStatus(ui: ConsolePanelContext['ui']): { el: HTMLElement; set: (text: string, tone?: 'busy' | 'ok' | 'bad' | '') => void } {
+function makeStatus(ui: WebUiPanelContext['ui']): { el: HTMLElement; set: (text: string, tone?: 'busy' | 'ok' | 'bad' | '') => void } {
   const el = ui.h('span', 'ip-status');
   return {
     el,
@@ -238,7 +238,7 @@ function renderStars(el: HTMLElement, total: number | null): void {
 }
 
 /** 一张卡里的小节：小标题 + 内容，给配置页做出段落层次（卡片 → 小节 → 字段）。 */
-function block(ui: ConsolePanelContext['ui'], title: string, ...children: HTMLElement[]): HTMLElement {
+function block(ui: WebUiPanelContext['ui'], title: string, ...children: HTMLElement[]): HTMLElement {
   const wrap = ui.h('div', 'ip-block');
   const body = ui.h('div', 'ip-blockbody');
   body.append(...children);
@@ -246,7 +246,7 @@ function block(ui: ConsolePanelContext['ui'], title: string, ...children: HTMLEl
   return wrap;
 }
 
-function mountDetail(ctx: ConsolePanelContext): void {
+function mountDetail(ctx: WebUiPanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
   ctx.root.classList.add('ip-shell');
@@ -506,7 +506,7 @@ function mountDetail(ctx: ConsolePanelContext): void {
 
 // --------------------------------------------------------------------- 列表
 
-function mountList(ctx: ConsolePanelContext): void {
+function mountList(ctx: WebUiPanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
   ctx.root.classList.add('ip-shell');
@@ -651,7 +651,7 @@ function mountList(ctx: ConsolePanelContext): void {
 
 // --------------------------------------------------------------------- 配置
 
-function mountSettings(ctx: ConsolePanelContext): void {
+function mountSettings(ctx: WebUiPanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
   ctx.root.classList.add('ip-shell');
@@ -1198,7 +1198,7 @@ function mountSettings(ctx: ConsolePanelContext): void {
 
 // ----------------------------------------------------------------- 兴趣记录
 
-function mountRecords(ctx: ConsolePanelContext): void {
+function mountRecords(ctx: WebUiPanelContext): void {
   const t = interestText(ctx.language);
   const ui = ctx.ui;
   ctx.root.classList.add('ip-shell');
@@ -1276,7 +1276,7 @@ function mountRecords(ctx: ConsolePanelContext): void {
   })();
 }
 
-const bundle: ConsoleClientBundle = {
+const bundle: WebUiClientBundle = {
   panels: {
     detail: { mount: mountDetail },
     list: { mount: mountList },

@@ -9,6 +9,7 @@
  * <data>/extensions/node_modules/<包名> 找包（见 cortico 的 src/extensions.ts readInstalled）。
  */
 import { cp, rm, mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +21,7 @@ const PACKAGES = [
 ];
 
 /** 拷贝白名单：运行时只要这些；node_modules 由框架侧提供，不拷。 */
-const ITEMS = ['src', 'dist', 'assets', 'scripts', 'tests', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.web.json', 'vitest.config.ts'];
+const ITEMS = ['src', 'dist', 'assets', 'scripts', 'tests', 'package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.web.json', 'vitest.config.ts', 'describe.json', 'CHANGELOG.md', 'README.md', 'LICENSE'];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');
@@ -59,8 +60,9 @@ for (const { dir, name } of PACKAGES) {
     continue;
   }
 
-  // 1) 面板产物：控制台那一页是 dist/console.js + dist/console.css
-  execFileSync(process.execPath, [join(from, 'scripts', 'build-console.mjs')], { cwd: from, stdio: 'inherit' });
+  // 1) 面板产物：v6 契约下是 dist/webui.js + dist/webui.css，旧扩展仍是 dist/console.*
+  const build = existsSync(join(from, 'scripts', 'build-webui.mjs')) ? 'build-webui.mjs' : 'build-console.mjs';
+  execFileSync(process.execPath, [join(from, 'scripts', build)], { cwd: from, stdio: 'inherit' });
 
   // 2) 拷贝
   const to = join(extRoot, 'node_modules', name);

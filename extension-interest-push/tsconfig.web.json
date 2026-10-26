@@ -18,9 +18,9 @@
     "noEmit": true
   },
   "include": [
-    "src/console/**/*.ts",
+    "src/webui/**/*.ts",
     "src/i18n.ts",
     "src/view-types.ts",
-    "tests/console-panel.test.ts"
+    "tests/webui-panel.test.ts"
   ]
 }

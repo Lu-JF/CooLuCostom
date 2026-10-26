@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+- 升到 world 契约 v6：`console()` 改 `webUi()`，`WorldConsoleDecl` 改 `WorldWebUiDecl`，面板产物改 `dist/webui.js` / `dist/webui.css`，
+  面板源码目录改 `src/webui/`，清单字段改 `cortico.webUiClient` / `webUiStyle`。
+- 补自描述 `describe.json`：声明 `paper_read` 工具与 `news.item` 事件，`cortico.describe` 指向该文件。
+- devDependency `cortico` 升到 0.2.7。
+
 ## 0.13.1
 
 - README 与市场复核申请对齐当前实现：数字时刻输入、随机推送 2.5 倍收敛、抓取与推送分离。
